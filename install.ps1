@@ -96,8 +96,23 @@ try {
 
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
     $staging = "$Target.new"
+    $previous = "$Target.old"
     Copy-Item -LiteralPath $exe -Destination $staging -Force
+    if (Test-Path -LiteralPath $previous) {
+        Remove-Item -LiteralPath $previous -Force -ErrorAction SilentlyContinue
+    }
+    if (Test-Path -LiteralPath $Target) {
+        # A running cc-switch.exe cannot be overwritten in place on Windows.
+        # Rename it out of the way first; the old file can stay locked until the process exits.
+        Rename-Item -LiteralPath $Target -NewName ([System.IO.Path]::GetFileName($previous))
+    }
     Move-Item -LiteralPath $staging -Destination $Target -Force
+    if (Test-Path -LiteralPath $previous) {
+        Remove-Item -LiteralPath $previous -Force -ErrorAction SilentlyContinue
+        if (Test-Path -LiteralPath $previous) {
+            Warn "Left $previous in place because the previous binary is still running. Delete it after cc-switch exits."
+        }
+    }
     Info "Installed $Target ($tag)"
 
     $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
