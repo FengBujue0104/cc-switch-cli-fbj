@@ -769,6 +769,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn mask_secret_for_display_hides_the_body_and_keeps_a_short_tail() {
+        assert_eq!(mask_secret_for_display(""), "");
+        assert_eq!(mask_secret_for_display("short"), "********");
+        assert_eq!(
+            mask_secret_for_display("sk-abcdefghijklmnopqrstuvwxyz1234"),
+            "********1234"
+        );
+        assert!(
+            !mask_secret_for_display("sk-abcdefghijklmnopqrstuvwxyz1234")
+                .contains("sk-abcdefghijklmnopqrstuvwxyz1234")
+        );
+    }
+
+    #[test]
     fn codex_official_settings_config_uses_upstream_seed_shape() {
         let cfg = build_codex_official_settings_config(None).expect("build official settings");
         assert!(
@@ -4290,6 +4304,36 @@ pub fn prompt_optional_fields(current: Option<&Provider>) -> Result<OptionalFiel
     })
 }
 
+fn mask_secret_for_display(value: &str) -> String {
+    let value = value.trim();
+    if value.is_empty() {
+        return String::new();
+    }
+    let count = value.chars().count();
+    if count <= 8 {
+        return "********".to_string();
+    }
+    let tail: String = value
+        .chars()
+        .rev()
+        .take(4)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect();
+    format!("********{tail}")
+}
+
+fn print_configured_api_key(provider: &Provider, app_type: &AppType) {
+    if let Some(api_key) = provider.configured_api_key(app_type) {
+        println!(
+            "  {}: {}",
+            texts::api_key_display_label(),
+            mask_secret_for_display(&api_key)
+        );
+    }
+}
+
 /// 显示供应商配置摘要
 pub fn display_provider_summary(provider: &Provider, app_type: &AppType) {
     println!(
@@ -4356,9 +4400,7 @@ pub fn display_provider_summary(provider: &Provider, app_type: &AppType) {
             }
             if let Some(env) = provider.settings_config.get("env") {
                 if !is_codex_oauth {
-                    if let Some(api_key) = provider.configured_api_key(app_type) {
-                        println!("  {}: {}", texts::api_key_display_label(), api_key);
-                    }
+                    print_configured_api_key(provider, app_type);
                 }
                 if let Some(base_url) = env.get("ANTHROPIC_BASE_URL").and_then(|v| v.as_str()) {
                     println!("  {}: {}", texts::base_url_display_label(), base_url);
@@ -4384,9 +4426,7 @@ pub fn display_provider_summary(provider: &Provider, app_type: &AppType) {
                     texts::tui_codex_api_format_value(api_format)
                 );
             }
-            if let Some(api_key) = provider.configured_api_key(app_type) {
-                println!("  {}: {}", texts::api_key_display_label(), api_key);
-            }
+            print_configured_api_key(provider, app_type);
             if let Some(config) = provider
                 .settings_config
                 .get("config")
@@ -4397,9 +4437,7 @@ pub fn display_provider_summary(provider: &Provider, app_type: &AppType) {
         }
         AppType::Gemini => {
             if let Some(env) = provider.settings_config.get("env") {
-                if let Some(api_key) = provider.configured_api_key(app_type) {
-                    println!("  {}: {}", texts::api_key_display_label(), api_key);
-                }
+                print_configured_api_key(provider, app_type);
                 if let Some(base_url) = env
                     .get("GOOGLE_GEMINI_BASE_URL")
                     .or_else(|| env.get("BASE_URL"))
@@ -4411,9 +4449,7 @@ pub fn display_provider_summary(provider: &Provider, app_type: &AppType) {
         }
         AppType::OpenCode => {
             if let Some(options) = provider.settings_config.get("options") {
-                if let Some(api_key) = provider.configured_api_key(app_type) {
-                    println!("  {}: {}", texts::api_key_display_label(), api_key);
-                }
+                print_configured_api_key(provider, app_type);
                 if let Some(base_url) = options.get("baseURL").and_then(|v| v.as_str()) {
                     println!("  {}: {}", texts::base_url_display_label(), base_url);
                 }
@@ -4427,9 +4463,7 @@ pub fn display_provider_summary(provider: &Provider, app_type: &AppType) {
             }
         }
         AppType::Hermes => {
-            if let Some(api_key) = provider.configured_api_key(app_type) {
-                println!("  {}: {}", texts::api_key_display_label(), api_key);
-            }
+            print_configured_api_key(provider, app_type);
             if let Some(base_url) = provider
                 .settings_config
                 .get("base_url")
@@ -4461,9 +4495,7 @@ pub fn display_provider_summary(provider: &Provider, app_type: &AppType) {
             }
         }
         AppType::OpenClaw => {
-            if let Some(api_key) = provider.configured_api_key(app_type) {
-                println!("  {}: {}", texts::api_key_display_label(), api_key);
-            }
+            print_configured_api_key(provider, app_type);
             if let Some(base_url) = provider
                 .settings_config
                 .get("baseUrl")
@@ -4480,13 +4512,7 @@ pub fn display_provider_summary(provider: &Provider, app_type: &AppType) {
             }
         }
         AppType::Pi => {
-            if provider.configured_api_key(app_type).is_some() {
-                println!(
-                    "  {}: {}",
-                    texts::api_key_display_label(),
-                    crate::t!("configured", "已配置")
-                );
-            }
+            print_configured_api_key(provider, app_type);
             if let Some(base_url) = provider
                 .settings_config
                 .get("baseUrl")
