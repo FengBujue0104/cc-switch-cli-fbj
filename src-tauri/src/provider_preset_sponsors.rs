@@ -200,6 +200,7 @@ pub(crate) const SPONSOR_PROVIDER_PRESETS: [SponsorProviderPreset; 10] = [
     FENNO,
 ];
 
+#[allow(dead_code)]
 const CLAUDE_SPONSOR_PRESETS: [SponsorProviderPreset; 10] = [
     AI_CODE_MIRROR,
     CLAUDE_API,
@@ -212,6 +213,7 @@ const CLAUDE_SPONSOR_PRESETS: [SponsorProviderPreset; 10] = [
     PACKY_CODE,
     DDS,
 ];
+#[allow(dead_code)]
 const CODEX_SPONSOR_PRESETS: [SponsorProviderPreset; 9] = [
     AI_CODE_MIRROR,
     PATEWAY_AI,
@@ -223,8 +225,10 @@ const CODEX_SPONSOR_PRESETS: [SponsorProviderPreset; 9] = [
     PACKY_CODE,
     DDS,
 ];
+#[allow(dead_code)]
 const GEMINI_SPONSOR_PRESETS: [SponsorProviderPreset; 5] =
     [AI_CODE_MIRROR, CUBENCE, OPENMODEL, QINIU, PACKY_CODE];
+#[allow(dead_code)]
 const ADDITIVE_SPONSOR_PRESETS: [SponsorProviderPreset; 7] = [
     AI_CODE_MIRROR,
     CUBENCE,
@@ -243,15 +247,10 @@ pub(crate) fn sponsor_provider_preset(id: &str) -> Option<SponsorProviderPreset>
 }
 
 pub(crate) fn sponsor_provider_presets_for_app(
-    app_type: &AppType,
+    _app_type: &AppType,
 ) -> &'static [SponsorProviderPreset] {
-    match app_type {
-        AppType::Claude => &CLAUDE_SPONSOR_PRESETS,
-        AppType::Codex => &CODEX_SPONSOR_PRESETS,
-        AppType::Gemini => &GEMINI_SPONSOR_PRESETS,
-        AppType::OpenCode | AppType::Hermes | AppType::OpenClaw => &ADDITIVE_SPONSOR_PRESETS,
-        AppType::Pi => &[],
-    }
+    // Personal fork: no partner / affiliate presets in the add-provider UI.
+    &[]
 }
 
 #[cfg(test)]
@@ -335,27 +334,7 @@ mod tests {
     }
 
     #[test]
-    fn additive_apps_share_one_sponsor_support_matrix() {
-        let expected = [
-            "aicodemirror",
-            "cubence",
-            "openmodel",
-            "runapi",
-            "qiniu",
-            "fenno",
-            "packycode",
-        ];
-        for app_type in [AppType::OpenCode, AppType::Hermes, AppType::OpenClaw] {
-            let ids = sponsor_provider_presets_for_app(&app_type)
-                .iter()
-                .map(|preset| preset.id)
-                .collect::<Vec<_>>();
-            assert_eq!(ids, expected);
-        }
-    }
-
-    #[test]
-    fn aicodemirror_is_the_first_sponsor_for_every_supported_app() {
+    fn sponsor_presets_are_hidden_from_every_app() {
         for app_type in [
             AppType::Claude,
             AppType::Codex,
@@ -363,13 +342,11 @@ mod tests {
             AppType::OpenCode,
             AppType::Hermes,
             AppType::OpenClaw,
+            AppType::Pi,
         ] {
-            assert_eq!(
-                sponsor_provider_presets_for_app(&app_type)
-                    .first()
-                    .map(|preset| preset.id),
-                Some("aicodemirror"),
-                "AICodeMirror should be the first sponsor preset for {app_type:?}"
+            assert!(
+                sponsor_provider_presets_for_app(&app_type).is_empty(),
+                "sponsor presets should be hidden for {app_type:?}"
             );
         }
     }

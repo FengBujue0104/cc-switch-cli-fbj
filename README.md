@@ -4,7 +4,7 @@
 
 ## CC-Switch CLI
 
-**Manage Claude Code, Codex, Gemini, OpenCode, Hermes, OpenClaw, and Pi from one interactive TUI or scriptable CLI.**
+**Manage Claude Code, Codex, Hermes, and Pi providers from one interactive TUI or scriptable CLI.**
 
 [![Version](https://img.shields.io/badge/version-5.10.5-blue.svg)](https://github.com/saladday/cc-switch-cli/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](https://github.com/saladday/cc-switch-cli/releases)
@@ -21,113 +21,9 @@ English | [中文](README_ZH.md)
 
 ## 📖 About
 
-This project is a **CLI fork** of [CC-Switch](https://github.com/farion1231/cc-switch). 
-
-🔄 The WebDAV sync feature is fully compatible with the upstream project.
-
+This project is a **personal lightweight fork** of [CC-Switch CLI](https://github.com/saladday/cc-switch-cli) (itself a CLI fork of [CC-Switch](https://github.com/farion1231/cc-switch)). It keeps provider switching for Claude, Codex, Hermes, and Pi. Partner promotions are removed.
 
 **Changelog:** [CHANGELOG.md](CHANGELOG.md)
-
----
-
-## ❤️ Sponsor
-
-[![AICodeMirror](assets/partners/banners/aicodemirror.png)](https://www.aicodemirror.ai/register?invitecode=77V9EA)
-
-Thanks to **AICodeMirror** for sponsoring this project! AICodeMirror provides highly reliable official relay services for Claude, Codex, and Gemini, supporting enterprise-grade concurrency, fast invoice issuance, and dedicated 24/7 technical support. Official Codex access is available for as little as **7% of the standard price**, with additional discounts on account top-ups!
-
-AICodeMirror also offers an exclusive benefit to users of the CC-Switch CLI project: register through [this link](https://www.aicodemirror.ai/register?invitecode=77V9EA) to receive **20% off your first top-up**.
-
----
-
-<table>
-  <tr>
-    <td width="180">
-      <a href="https://console.apito.ai/agent/register/Bsi9NDlWGpkPoAii">
-        <img src="assets/partners/logos/claudeapi.png" alt="ClaudeAPI" width="150">
-      </a>
-    </td>
-    <td>
-      Thanks to <b>ClaudeAPI</b> for supporting this project! <b>ClaudeAPI</b> is a Claude-focused API access provider built on official and AWS channels, offering high stability, low latency, and full support for Claude Code, Codex, Agent workflows, and enterprise use cases. It also supports business onboarding, team usage management, and invoicing. Exclusive offer for CC-Switch CLI users: register via this <a href="https://console.apito.ai/agent/register/Bsi9NDlWGpkPoAii">exclusive link</a> to receive free trial credits and get started with Claude Code instantly.
-    </td>
-  </tr>
-  <tr>
-    <td width="180">
-      <a href="https://pateway.ai/?ch=18fxbjo">
-        <img src="assets/partners/logos/pateway.png" alt="PatewayAI" width="150">
-      </a>
-    </td>
-    <td>
-      PatewayAI is an API relay service tailored for seasoned AI developers. It offers full‑fledged support for Claude and Codex model families. All models are sourced from high‑quality official channels with no diluted or counterfeit outputs. Transparent billing details are available for full traceability.<br/>
-      Enjoy rates as low as 95% off official pricing. Sign up via <a href="https://pateway.ai/?ch=18fxbjo">this link</a> to receive trial credits, and stay tuned for periodic promotional campaigns to earn free credits.<br/>
-      The platform also delivers enterprise‑grade concurrency capacity, a dedicated admin dashboard, formal contracts and invoicing support. Earn up to $150 in mutual referral bonuses.
-    </td>
-  </tr>
-  <tr>
-    <td width="180">
-      <a href="https://cubence.com/signup?code=SC3M1CAH&source=ccscli">
-        <img src="assets/partners/logos/cubence.png" alt="Cubence" width="150">
-      </a>
-    </td>
-    <td>
-      Thanks to <b>Cubence</b> for sponsoring this project! Cubence is an API relay service provider dedicated to offering stable and efficient services to its customers. Operating since September 2025, it has provided support for various models such as Claude code, Codex, and Gemini. Register via <a href="https://cubence.com/signup?code=SC3M1CAH&source=ccscli">this link</a> and use the <code>CCSCLI</code> discount code when topping up to enjoy a 10% discount.
-    </td>
-  </tr>
-  <tr>
-    <td width="180">
-      <a href="https://www.openmodel.ai/?ref=JGDNqZl8">
-        <img src="assets/partners/logos/openmodel.jpg" alt="OpenModel" width="150">
-      </a>
-    </td>
-    <td>
-      One API, every top model! <a href="https://www.openmodel.ai/?ref=JGDNqZl8"><b>OpenModel</b></a> is a production-grade, high-availability AI API gateway that makes your applications truly fast and stable: automatic failover, smart routing to the best-performing channel, and a production-grade SLA. An SLA that far surpasses any single provider — making stability your core competitive advantage. Works directly with Claude Code, Codex, and Gemini CLI. Register via <a href="https://www.openmodel.ai/?ref=JGDNqZl8">this link</a> to get started.
-    </td>
-  </tr>
-  <tr>
-    <td width="180">
-      <a href="https://s.qiniu.com/FVfiEb">
-        <img src="assets/partners/logos/qiniuyun.png" alt="Qiniu Cloud AI" width="150">
-      </a>
-    </td>
-    <td>
-      Thanks to <b>Qiniu Cloud AI</b> for sponsoring this project! <b>Qiniu Cloud AI</b> is an enterprise-grade large-model MaaS platform from <b>Qiniu Cloud (HKEX: 02567)</b>, offering one-stop access to 150+ mainstream models worldwide, compatibility with the protocols of major global model vendors, and full-modality coverage across text, image, audio, video, and file processing — serving over <b>1.69 million</b> enterprise and developer users. <br/>
-      Exclusive benefits: enterprise users can claim <b>12 million free tokens</b>, and referring friends can earn up to <b>tens of billions of tokens</b>. Register via <a href="https://s.qiniu.com/FVfiEb">this link</a>.
-    </td>
-  </tr>
-  <tr>
-    <td width="180">
-      <a href="https://api.fenno.ai/register?redirect=/purchase?tab=subscription%26group=16&aff=Z6XB52KCVP6Y">
-        <img src="assets/partners/logos/fennoai.png" alt="Fenno.ai" width="150">
-      </a>
-    </td>
-    <td>
-      Thanks to <b>Fenno.ai</b> for sponsoring this project! Fenno.ai is a stable, efficient API relay provider currently focused on Codex relay. It is compatible with both the OpenAI and Anthropic protocols and plugs smoothly into mainstream coding tools such as Codex, Claude Code, and OpenCode, reliably sustaining enterprise workloads of hundreds of billions of tokens per day, with corporate (B2B) settlement and invoicing for both domestic and overseas entities. <br/>
-      Exclusive benefit for CC-Switch CLI users: register via <a href="https://api.fenno.ai/register?redirect=/purchase?tab=subscription%26group=16&aff=Z6XB52KCVP6Y">this link</a> to subscribe to a great-value Coding Plan — <b>¥9.9 for $150 of credit</b> — and earn up to a <b>20% reward</b> for referrals; the more you invite, the more you get!
-    </td>
-  </tr>
-  <tr>
-    <td width="180">
-      <a href="https://www.packyapi.com/register?aff=cc-switch-cli">
-        <img src="assets/partners/logos/packycode.png" alt="PackyCode" width="150">
-      </a>
-    </td>
-    <td>
-      Thanks to <b>PackyCode</b> for sponsoring this project! PackyCode is a reliable and efficient API relay service provider, offering relay services for Claude Code, Codex, Gemini, and more. <br/>
-      PackyCode provides special discounts for our software users: register via <a href="https://www.packyapi.com/register?aff=cc-switch-cli">this link</a> and use promo code <code>cc-switch-cli</code> when recharging to get <b>10% off</b>.
-    </td>
-  </tr>
-  <tr>
-    <td width="180">
-      <a href="https://ddshub.short.gy/ccscli">
-        <img src="assets/partners/logos/DDSHub.png" alt="DDS" width="150">
-      </a>
-    </td>
-    <td>
-      Thanks to <b>DDS</b> for sponsoring this project! DDS Hub is a reliable and high-performance Claude API proxy service. DDS Hub provides cost-effective domestic Claude direct acceleration services for both individual and enterprise users. We offer stable and low-latency Claude Max number pools, with full support for <b>Claude Haiku, Opus, Sonnet</b> and other flagship models. Invoices are available for recharges of 1000 RMB or more. Enterprise customers can also enjoy customized grouping and dedicated technical support services. <br/>
-      Exclusive benefit for CC-Switch CLI users: register via <a href="https://ddshub.short.gy/ccscli">this link</a> and enjoy <b>an extra 10% credit</b> on your first recharge (please contact the group admin to claim after recharging)!
-    </td>
-  </tr>
-</table>
 
 ---
 

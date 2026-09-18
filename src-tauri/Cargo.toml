@@ -20,7 +20,10 @@ path = "src/main.rs"
 required-features = ["cli"]
 
 [features]
-default = ["cli"]
+default = ["cli", "proxy"]
+# Optional local proxy plugin (API format conversion). Default-on for releases;
+# omit with `--no-default-features --features cli` to compile without proxy commands.
+proxy = []
 cli = [
     "dep:clap",
     "dep:clap_complete",

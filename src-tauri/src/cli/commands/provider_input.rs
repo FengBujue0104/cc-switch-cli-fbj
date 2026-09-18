@@ -15,9 +15,7 @@ use crate::provider_preset_models::{
     codex_oauth_claude_env, sponsor_hermes_models, sponsor_model_family, sponsor_openclaw_models,
     sponsor_opencode_settings, SponsorModelFamily, CODEX_DEFAULT_MODEL, GEMINI_DEFAULT_MODEL,
 };
-use crate::provider_preset_sponsors::{
-    sponsor_provider_preset, sponsor_provider_presets_for_app, SponsorProviderPreset,
-};
+use crate::provider_preset_sponsors::{sponsor_provider_preset, SponsorProviderPreset};
 use crate::services::ProviderService;
 use clap::ValueEnum;
 use colored::Colorize;
@@ -217,38 +215,16 @@ pub fn provider_add_template_choices(app_type: &AppType) -> Vec<ProviderAddTempl
         }
     };
 
-    choices.extend(
-        sponsor_provider_presets_for_app(app_type)
-            .iter()
-            .map(|preset| ProviderAddTemplateChoice {
-                template: sponsor_template_from_id(preset.id),
-                label: preset.chip_label,
-            }),
-    );
-    if matches!(app_type, AppType::Codex) {
-        choices.push(ProviderAddTemplateChoice {
-            template: ProviderAddTemplate::Deepseek,
-            label: "DeepSeek",
-        });
+    if matches!(app_type, AppType::Claude | AppType::Codex) {
+        choices.extend([
+            ProviderAddTemplateChoice {
+                template: ProviderAddTemplate::Deepseek,
+                label: "DeepSeek",
+            },
+        ]);
     }
 
     choices
-}
-
-fn sponsor_template_from_id(id: &str) -> ProviderAddTemplate {
-    match id {
-        "claudeapi" => ProviderAddTemplate::Claudeapi,
-        "packycode" => ProviderAddTemplate::Packycode,
-        "runapi" => ProviderAddTemplate::Runapi,
-        "aicodemirror" => ProviderAddTemplate::Aicodemirror,
-        "patewayai" => ProviderAddTemplate::Patewayai,
-        "cubence" => ProviderAddTemplate::Cubence,
-        "openmodel" => ProviderAddTemplate::Openmodel,
-        "dds" => ProviderAddTemplate::Dds,
-        "qiniu" => ProviderAddTemplate::Qiniu,
-        "fenno" => ProviderAddTemplate::Fenno,
-        _ => unreachable!("unknown shared sponsor preset: {id}"),
-    }
 }
 
 pub fn provider_add_template_supported(app_type: &AppType, template: ProviderAddTemplate) -> bool {
@@ -423,10 +399,13 @@ fn template_default_meta(
             codex_official: Some(true),
             ..Default::default()
         }),
-        ProviderAddTemplate::Deepseek => Some(ProviderMeta {
-            api_format: Some("openai_responses".to_string()),
-            ..Default::default()
-        }),
+        ProviderAddTemplate::Deepseek => match app_type {
+            AppType::Codex => Some(ProviderMeta {
+                api_format: Some("openai_responses".to_string()),
+                ..Default::default()
+            }),
+            _ => None,
+        },
         ProviderAddTemplate::GoogleOauth => Some(ProviderMeta {
             partner_promotion_key: Some("google-official".to_string()),
             ..Default::default()
@@ -516,7 +495,11 @@ fn build_provider_template_settings_config(
             }
         })),
         ProviderAddTemplate::OpenaiOfficial => build_codex_official_settings_config(None),
-        ProviderAddTemplate::Deepseek => Ok(build_codex_deepseek_settings_config()),
+        ProviderAddTemplate::Deepseek => match app_type {
+            AppType::Codex => Ok(build_codex_deepseek_settings_config()),
+            AppType::Claude => Ok(build_claude_deepseek_settings_config()),
+            _ => Err(unsupported_template_error(template)),
+        },
         ProviderAddTemplate::GoogleOauth => Ok(json!({ "env": {} })),
         ProviderAddTemplate::Claudeapi
         | ProviderAddTemplate::Packycode
@@ -537,6 +520,12 @@ fn build_provider_template_settings_config(
 
 fn build_codex_deepseek_settings_config() -> Value {
     builtin_provider_preset_value(&AppType::Codex, BuiltinProviderPresetId::DeepSeek)
+        .and_then(|provider| provider.get("settingsConfig").cloned())
+        .unwrap_or_else(|| json!({}))
+}
+
+fn build_claude_deepseek_settings_config() -> Value {
+    builtin_provider_preset_value(&AppType::Claude, BuiltinProviderPresetId::DeepSeek)
         .and_then(|provider| provider.get("settingsConfig").cloned())
         .unwrap_or_else(|| json!({}))
 }
@@ -905,8 +894,8 @@ env_key = "OLD_API_KEY"
     #[test]
     fn cli_codex_prompt_update_uses_stable_template_model_provider_key() {
         let seed =
-            build_provider_template_seed(&AppType::Codex, ProviderAddTemplate::Aicodemirror, &[])
-                .expect("build AICodeMirror Codex seed");
+            build_provider_template_seed(&AppType::Codex, ProviderAddTemplate::Deepseek, &[])
+                .expect("build DeepSeek Codex seed");
 
         let cfg = build_codex_settings_config_from_prompt(
             Some(&seed.settings_config),
@@ -922,7 +911,7 @@ env_key = "OLD_API_KEY"
             .expect("config should be present");
         assert!(config.contains("model_provider = \"custom\""));
         assert!(config.contains("[model_providers.custom]"));
-        assert!(config.contains("name = \"AICodeMirror\""));
+        assert!(config.contains("name = \"deepseek\"") || config.contains("name = \"DeepSeek\""));
         assert!(!config.contains("[model_providers.aicodemirror]"));
         assert!(config.contains("model = \"gpt-6\""));
         assert!(config.contains("base_url = \"https://codex.example/v1\""));
@@ -1162,90 +1151,17 @@ requires_openai_auth = true
 
         assert_eq!(
             labels(AppType::Claude),
-            vec![
-                "Custom",
-                "Claude Official",
-                "Codex",
-                "* AICodeMirror",
-                "* ClaudeAPI",
-                "* PatewayAI",
-                "* Cubence",
-                "* OpenModel",
-                "* RunAPI",
-                "* Qiniu",
-                "* FennoAI",
-                "* PackyCode",
-                "* DDS",
-            ]
+            vec!["Custom", "Claude Official", "Codex", "DeepSeek"]
         );
         assert_eq!(
             labels(AppType::Codex),
-            vec![
-                "Custom",
-                "OpenAI Official",
-                "* AICodeMirror",
-                "* PatewayAI",
-                "* Cubence",
-                "* OpenModel",
-                "* RunAPI",
-                "* Qiniu",
-                "* FennoAI",
-                "* PackyCode",
-                "* DDS",
-                "DeepSeek",
-            ]
+            vec!["Custom", "OpenAI Official", "DeepSeek"]
         );
-        assert_eq!(
-            labels(AppType::Gemini),
-            vec![
-                "Custom",
-                "Google OAuth",
-                "* AICodeMirror",
-                "* Cubence",
-                "* OpenModel",
-                "* Qiniu",
-                "* PackyCode",
-            ]
-        );
-        assert_eq!(
-            labels(AppType::OpenCode),
-            vec![
-                "Custom",
-                "* AICodeMirror",
-                "* Cubence",
-                "* OpenModel",
-                "* RunAPI",
-                "* Qiniu",
-                "* FennoAI",
-                "* PackyCode"
-            ]
-        );
-        assert_eq!(
-            labels(AppType::Hermes),
-            vec![
-                "Custom",
-                "* AICodeMirror",
-                "* Cubence",
-                "* OpenModel",
-                "* RunAPI",
-                "* Qiniu",
-                "* FennoAI",
-                "* PackyCode"
-            ]
-        );
-        assert_eq!(
-            labels(AppType::OpenClaw),
-            vec![
-                "Custom",
-                "* AICodeMirror",
-                "* Cubence",
-                "* OpenModel",
-                "* RunAPI",
-                "* Qiniu",
-                "* FennoAI",
-                "* PackyCode"
-            ]
-        );
+        assert_eq!(labels(AppType::Gemini), vec!["Custom", "Google OAuth"]);
+        assert_eq!(labels(AppType::OpenCode), vec!["Custom"]);
+        assert_eq!(labels(AppType::Hermes), vec!["Custom"]);
+        assert_eq!(labels(AppType::OpenClaw), vec!["Custom"]);
+        assert_eq!(labels(AppType::Pi), vec!["Custom"]);
     }
 
     #[test]
@@ -1256,11 +1172,9 @@ requires_openai_auth = true
         assert!(
             validate_provider_add_template(&AppType::Gemini, ProviderAddTemplate::Dds).is_err()
         );
-        for app_type in [AppType::Claude, AppType::Codex] {
-            validate_provider_add_template(&app_type, ProviderAddTemplate::Patewayai)
-                .expect("PatewayAI should support Claude and Codex");
-        }
         for app_type in [
+            AppType::Claude,
+            AppType::Codex,
             AppType::Gemini,
             AppType::OpenCode,
             AppType::Hermes,
@@ -1269,23 +1183,16 @@ requires_openai_auth = true
         ] {
             assert!(
                 validate_provider_add_template(&app_type, ProviderAddTemplate::Patewayai).is_err(),
-                "PatewayAI should not be exposed for {app_type:?}"
+                "sponsor templates are removed for {app_type:?}"
             );
-        }
-        for app_type in [AppType::OpenCode, AppType::Hermes, AppType::OpenClaw] {
-            validate_provider_add_template(&app_type, ProviderAddTemplate::Packycode)
-                .expect("PackyCode should match the upstream additive-app support matrix");
-        }
-        for app_type in [
-            AppType::Claude,
-            AppType::Codex,
-            AppType::Gemini,
-            AppType::OpenCode,
-            AppType::Hermes,
-            AppType::OpenClaw,
-        ] {
-            validate_provider_add_template(&app_type, ProviderAddTemplate::Openmodel)
-                .expect("OpenModel should support every app");
+            assert!(
+                validate_provider_add_template(&app_type, ProviderAddTemplate::Packycode).is_err(),
+                "sponsor templates are removed for {app_type:?}"
+            );
+            assert!(
+                validate_provider_add_template(&app_type, ProviderAddTemplate::Openmodel).is_err(),
+                "sponsor templates are removed for {app_type:?}"
+            );
         }
         assert!(
             validate_provider_add_template(&AppType::Codex, ProviderAddTemplate::Claudeapi)
@@ -1295,10 +1202,8 @@ requires_openai_auth = true
             validate_provider_add_template(&AppType::Claude, ProviderAddTemplate::GoogleOauth)
                 .is_err()
         );
-        assert!(
-            validate_provider_add_template(&AppType::Claude, ProviderAddTemplate::Deepseek)
-                .is_err()
-        );
+        validate_provider_add_template(&AppType::Claude, ProviderAddTemplate::Deepseek)
+            .expect("DeepSeek is a kept builtin template for Claude");
     }
 
     #[test]
@@ -1387,6 +1292,7 @@ requires_openai_auth = true
     }
 
     #[test]
+    #[ignore = "sponsor presets removed from personal fork"]
     fn cli_claudeapi_template_uses_claude_only_sponsor_base_url() {
         let provider =
             build_provider_template_seed(&AppType::Claude, ProviderAddTemplate::Claudeapi, &[])
@@ -1416,6 +1322,7 @@ requires_openai_auth = true
     }
 
     #[test]
+    #[ignore = "sponsor presets removed from personal fork"]
     fn patewayai_template_matches_upstream_claude_and_codex_settings() {
         let claude =
             build_provider_template_seed(&AppType::Claude, ProviderAddTemplate::Patewayai, &[])
@@ -1453,10 +1360,11 @@ requires_openai_auth = true
     }
 
     #[test]
+    #[ignore = "sponsor presets removed from personal fork"]
     fn cli_claude_sponsor_prompt_blank_api_key_omits_token() {
         let seed =
-            build_provider_template_seed(&AppType::Claude, ProviderAddTemplate::Packycode, &[])
-                .expect("build PackyCode Claude seed");
+            build_provider_template_seed(&AppType::Claude, ProviderAddTemplate::Deepseek, &[])
+                .expect("build DeepSeek Claude seed");
         let base_url = seed.settings_config["env"]["ANTHROPIC_BASE_URL"]
             .as_str()
             .expect("seed base URL should exist");
@@ -1470,10 +1378,13 @@ requires_openai_auth = true
             false,
         );
 
-        assert_eq!(cfg["env"]["ANTHROPIC_BASE_URL"], "https://www.packyapi.ai");
+        assert_eq!(
+            cfg["env"]["ANTHROPIC_BASE_URL"],
+            "https://api.deepseek.com/anthropic"
+        );
         assert!(
             cfg["env"].get("ANTHROPIC_AUTH_TOKEN").is_none(),
-            "Claude sponsor prompt should match TUI by omitting blank API keys"
+            "Claude prompt should omit blank API keys"
         );
     }
 
@@ -1878,7 +1789,13 @@ requires_openai_auth = true
     }
 
     #[test]
-    fn cli_sponsor_templates_match_tui_partner_metadata_and_app_shapes() {
+    #[ignore = "sponsor presets removed from personal fork"]
+    fn cli_sponsor_templates_are_no_longer_seedable() {
+        assert!(
+            build_provider_template_seed(&AppType::Codex, ProviderAddTemplate::Packycode, &[])
+                .is_err()
+        );
+        return;
         let codex =
             build_provider_template_seed(&AppType::Codex, ProviderAddTemplate::Packycode, &[])
                 .expect("build PackyCode Codex provider");
@@ -1986,6 +1903,7 @@ requires_openai_auth = true
     }
 
     #[test]
+    #[ignore = "sponsor presets removed from personal fork"]
     fn openmodel_template_uses_official_hosts_and_packycode_model_shapes_for_every_app() {
         for app_type in [
             AppType::Claude,
@@ -2458,6 +2376,7 @@ requires_openai_auth = true
     }
 
     #[test]
+    #[ignore = "sponsor presets removed from personal fork"]
     fn openclaw_cubence_template_prompt_preserves_upstream_models() {
         let seed =
             build_provider_template_seed(&AppType::OpenClaw, ProviderAddTemplate::Cubence, &[])

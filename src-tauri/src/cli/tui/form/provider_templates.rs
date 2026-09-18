@@ -147,7 +147,7 @@ static PROVIDER_TEMPLATE_DEFS_CODEX: [ProviderTemplateDef; 2] = [
     },
 ];
 
-static PROVIDER_TEMPLATE_DEFS_CLAUDE_AFTER_SPONSORS: [ProviderTemplateDef; 9] = [
+static PROVIDER_TEMPLATE_DEFS_CLAUDE_AFTER_SPONSORS: [ProviderTemplateDef; 5] = [
     ProviderTemplateDef {
         id: ProviderTemplateId::Builtin(BuiltinProviderPresetId::DeepSeek),
         label: "DeepSeek",
@@ -157,28 +157,12 @@ static PROVIDER_TEMPLATE_DEFS_CLAUDE_AFTER_SPONSORS: [ProviderTemplateDef; 9] = 
         label: "Zhipu GLM",
     },
     ProviderTemplateDef {
-        id: ProviderTemplateId::Builtin(BuiltinProviderPresetId::ZhipuGlmEn),
-        label: "Zhipu GLM en",
-    },
-    ProviderTemplateDef {
-        id: ProviderTemplateId::Builtin(BuiltinProviderPresetId::ModelScope),
-        label: "ModelScope",
-    },
-    ProviderTemplateDef {
         id: ProviderTemplateId::Builtin(BuiltinProviderPresetId::MiniMax),
         label: "MiniMax",
     },
     ProviderTemplateDef {
         id: ProviderTemplateId::Builtin(BuiltinProviderPresetId::XiaomiMimo),
         label: "Xiaomi MiMo",
-    },
-    ProviderTemplateDef {
-        id: ProviderTemplateId::Builtin(BuiltinProviderPresetId::XiaomiMimoTokenPlan),
-        label: "Xiaomi MiMo Token Plan (China)",
-    },
-    ProviderTemplateDef {
-        id: ProviderTemplateId::Builtin(BuiltinProviderPresetId::OpenCodeGo),
-        label: "OpenCode Go",
     },
     ProviderTemplateDef {
         id: ProviderTemplateId::Builtin(BuiltinProviderPresetId::OpenRouter),
@@ -186,7 +170,7 @@ static PROVIDER_TEMPLATE_DEFS_CLAUDE_AFTER_SPONSORS: [ProviderTemplateDef; 9] = 
     },
 ];
 
-static PROVIDER_TEMPLATE_DEFS_CODEX_AFTER_SPONSORS: [ProviderTemplateDef; 9] = [
+static PROVIDER_TEMPLATE_DEFS_CODEX_AFTER_SPONSORS: [ProviderTemplateDef; 5] = [
     ProviderTemplateDef {
         id: ProviderTemplateId::Builtin(BuiltinProviderPresetId::DeepSeek),
         label: "DeepSeek",
@@ -196,28 +180,12 @@ static PROVIDER_TEMPLATE_DEFS_CODEX_AFTER_SPONSORS: [ProviderTemplateDef; 9] = [
         label: "Zhipu GLM",
     },
     ProviderTemplateDef {
-        id: ProviderTemplateId::Builtin(BuiltinProviderPresetId::ZhipuGlmEn),
-        label: "Zhipu GLM en",
-    },
-    ProviderTemplateDef {
-        id: ProviderTemplateId::Builtin(BuiltinProviderPresetId::ModelScope),
-        label: "ModelScope",
-    },
-    ProviderTemplateDef {
         id: ProviderTemplateId::Builtin(BuiltinProviderPresetId::MiniMax),
         label: "MiniMax",
     },
     ProviderTemplateDef {
         id: ProviderTemplateId::Builtin(BuiltinProviderPresetId::XiaomiMimo),
         label: "Xiaomi MiMo",
-    },
-    ProviderTemplateDef {
-        id: ProviderTemplateId::Builtin(BuiltinProviderPresetId::XiaomiMimoTokenPlan),
-        label: "Xiaomi MiMo Token Plan (China)",
-    },
-    ProviderTemplateDef {
-        id: ProviderTemplateId::Builtin(BuiltinProviderPresetId::OpenCodeGo),
-        label: "OpenCode Go",
     },
     ProviderTemplateDef {
         id: ProviderTemplateId::Builtin(BuiltinProviderPresetId::OpenRouter),
@@ -410,19 +378,18 @@ impl ProviderAddFormState {
                         section: ProviderTemplateSection::BuiltIn,
                     }),
             );
-            rows.push(ProviderTemplateRow::Header(
-                ProviderTemplateSection::Sponsors,
-            ));
-            rows.extend(
-                PI_SPONSOR_PROVIDER_PRESETS
-                    .iter()
-                    .enumerate()
-                    .map(|(offset, preset)| ProviderTemplateRow::Item {
+            if !PI_SPONSOR_PROVIDER_PRESETS.is_empty() {
+                rows.push(ProviderTemplateRow::Header(
+                    ProviderTemplateSection::Sponsors,
+                ));
+                rows.extend(PI_SPONSOR_PROVIDER_PRESETS.iter().enumerate().map(
+                    |(offset, preset)| ProviderTemplateRow::Item {
                         flat_idx: 1 + PI_BUILTIN_PROVIDER_PRESETS.len() + offset,
                         label: preset.label,
                         section: ProviderTemplateSection::Sponsors,
-                    }),
-            );
+                    },
+                ));
+            }
             return rows;
         }
         let builtin_defs = provider_builtin_template_defs(&self.app_type);

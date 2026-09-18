@@ -457,36 +457,35 @@ requires_openai_auth = true
 
 #[test]
 #[serial]
-fn add_sponsor_template_inherits_base_url() {
+fn add_deepseek_template_inherits_base_url() {
     let _guard = lock_test_mutex();
     prepare_empty_state();
 
     run_add(
-        Some("Packy"),
+        Some("DeepSeek"),
         AppType::Claude,
         AddOpts {
-            template: Some(ProviderAddTemplate::Packycode),
-            api_key: Some("sk-packy".to_string()),
+            template: Some(ProviderAddTemplate::Deepseek),
+            api_key: Some("sk-deepseek".to_string()),
             ..Default::default()
         },
     )
-    .expect("sponsor template add should succeed");
+    .expect("DeepSeek template add should succeed");
 
-    let provider = saved_provider(AppType::Claude, "packy");
+    let provider = saved_provider(AppType::Claude, "deepseek");
     assert_eq!(
         env_str(&provider, "ANTHROPIC_BASE_URL"),
-        Some("https://www.packyapi.ai")
+        Some("https://api.deepseek.com/anthropic")
     );
-    assert_eq!(env_str(&provider, "ANTHROPIC_AUTH_TOKEN"), Some("sk-packy"));
     assert_eq!(
-        provider.meta.as_ref().and_then(|meta| meta.is_partner),
-        Some(true)
+        env_str(&provider, "ANTHROPIC_AUTH_TOKEN"),
+        Some("sk-deepseek")
     );
 }
 
 #[test]
 #[serial]
-fn add_packycode_template_is_scriptable_for_every_additive_app() {
+fn add_packycode_template_is_rejected() {
     let _guard = lock_test_mutex();
     prepare_empty_state();
 
@@ -494,8 +493,9 @@ fn add_packycode_template_is_scriptable_for_every_additive_app() {
         (AppType::OpenCode, "Packy OpenCode"),
         (AppType::Hermes, "Packy Hermes"),
         (AppType::OpenClaw, "Packy OpenClaw"),
+        (AppType::Claude, "Packy Claude"),
     ] {
-        run_add(
+        let err = run_add(
             Some(name),
             app_type.clone(),
             AddOpts {
@@ -504,159 +504,31 @@ fn add_packycode_template_is_scriptable_for_every_additive_app() {
                 ..Default::default()
             },
         )
-        .expect("PackyCode additive preset should accept non-interactive API-key input");
+        .expect_err("sponsor templates are removed");
+        let _ = err;
     }
-
-    let opencode = saved_provider(AppType::OpenCode, "packy-opencode");
-    assert_eq!(opencode.settings_config["options"]["apiKey"], "sk-packy");
-    assert_eq!(
-        opencode.settings_config["options"]["baseURL"],
-        "https://www.packyapi.ai/v1"
-    );
-    assert!(opencode.settings_config["models"]
-        .get("claude-opus-5")
-        .is_some());
-
-    let hermes = saved_provider(AppType::Hermes, "packy-hermes");
-    assert_eq!(hermes.settings_config["api_key"], "sk-packy");
-    assert_eq!(
-        hermes.settings_config["base_url"],
-        "https://www.packyapi.ai"
-    );
-    assert_eq!(hermes.settings_config["api_mode"], "anthropic_messages");
-    assert_eq!(hermes.settings_config["models"][0]["id"], "claude-opus-5");
-
-    let openclaw = saved_provider(AppType::OpenClaw, "packy-openclaw");
-    assert_eq!(openclaw.settings_config["apiKey"], "sk-packy");
-    assert_eq!(
-        openclaw.settings_config["baseUrl"],
-        "https://www.packyapi.ai"
-    );
-    assert_eq!(openclaw.settings_config["api"], "anthropic-messages");
-    assert_eq!(openclaw.settings_config["models"][0]["id"], "claude-opus-5");
 }
 
 #[test]
 #[serial]
-fn add_openmodel_template_is_scriptable_for_every_app() {
+fn add_remaining_sponsor_templates_are_rejected() {
     let _guard = lock_test_mutex();
     prepare_empty_state();
-
-    for (app_type, name) in [
-        (AppType::Claude, "OpenModel Claude"),
-        (AppType::Codex, "OpenModel Codex"),
-        (AppType::Gemini, "OpenModel Gemini"),
-        (AppType::OpenCode, "OpenModel OpenCode"),
-        (AppType::Hermes, "OpenModel Hermes"),
-        (AppType::OpenClaw, "OpenModel OpenClaw"),
+    for template in [
+        ProviderAddTemplate::Openmodel,
+        ProviderAddTemplate::Patewayai,
     ] {
         run_add(
-            Some(name),
-            app_type,
+            Some("Sponsor"),
+            AppType::Claude,
             AddOpts {
-                template: Some(ProviderAddTemplate::Openmodel),
-                api_key: Some("om-test".to_string()),
+                template: Some(template),
+                api_key: Some("sk-test".to_string()),
                 ..Default::default()
             },
         )
-        .expect("OpenModel preset should accept non-interactive API-key input");
+        .expect_err("sponsor templates are removed");
     }
-
-    let claude = saved_provider(AppType::Claude, "openmodel-claude");
-    assert_eq!(env_str(&claude, "ANTHROPIC_AUTH_TOKEN"), Some("om-test"));
-    assert_eq!(
-        env_str(&claude, "ANTHROPIC_BASE_URL"),
-        Some("https://api.openmodel.ai")
-    );
-
-    let codex = saved_provider(AppType::Codex, "openmodel-codex");
-    assert_eq!(codex.settings_config["auth"]["OPENAI_API_KEY"], "om-test");
-    let codex_config = codex.settings_config["config"]
-        .as_str()
-        .expect("OpenModel Codex config should be TOML");
-    assert!(codex_config.contains("model = \"gpt-5.6-sol\""));
-    assert!(codex_config.contains("base_url = \"https://api.openmodel.ai/v1\""));
-    assert!(codex_config.contains("wire_api = \"responses\""));
-
-    let gemini = saved_provider(AppType::Gemini, "openmodel-gemini");
-    assert_eq!(env_str(&gemini, "GEMINI_API_KEY"), Some("om-test"));
-    assert_eq!(
-        env_str(&gemini, "GOOGLE_GEMINI_BASE_URL"),
-        Some("https://api.openmodel.ai")
-    );
-    assert_eq!(env_str(&gemini, "GEMINI_MODEL"), Some("gemini-3.6-flash"));
-
-    let opencode = saved_provider(AppType::OpenCode, "openmodel-opencode");
-    assert_eq!(opencode.settings_config["options"]["apiKey"], "om-test");
-    assert_eq!(
-        opencode.settings_config["options"]["baseURL"],
-        "https://api.openmodel.ai/v1"
-    );
-    assert!(opencode.settings_config["models"]
-        .get("claude-opus-5")
-        .is_some());
-
-    let hermes = saved_provider(AppType::Hermes, "openmodel-hermes");
-    assert_eq!(hermes.settings_config["api_key"], "om-test");
-    assert_eq!(
-        hermes.settings_config["base_url"],
-        "https://api.openmodel.ai"
-    );
-    assert_eq!(hermes.settings_config["api_mode"], "anthropic_messages");
-    assert_eq!(hermes.settings_config["models"][0]["id"], "claude-opus-5");
-
-    let openclaw = saved_provider(AppType::OpenClaw, "openmodel-openclaw");
-    assert_eq!(openclaw.settings_config["apiKey"], "om-test");
-    assert_eq!(
-        openclaw.settings_config["baseUrl"],
-        "https://api.openmodel.ai"
-    );
-    assert_eq!(openclaw.settings_config["api"], "anthropic-messages");
-    assert_eq!(openclaw.settings_config["models"][0]["id"], "claude-opus-5");
-}
-
-#[test]
-#[serial]
-fn add_patewayai_template_uses_upstream_claude_and_codex_settings() {
-    let _guard = lock_test_mutex();
-    prepare_empty_state();
-
-    for (app_type, name) in [
-        (AppType::Claude, "PatewayAI Claude"),
-        (AppType::Codex, "PatewayAI Codex"),
-    ] {
-        run_add(
-            Some(name),
-            app_type,
-            AddOpts {
-                template: Some(ProviderAddTemplate::Patewayai),
-                api_key: Some("pateway-test".to_string()),
-                ..Default::default()
-            },
-        )
-        .expect("PatewayAI preset should accept non-interactive API-key input");
-    }
-
-    let claude = saved_provider(AppType::Claude, "patewayai-claude");
-    assert_eq!(env_str(&claude, "ANTHROPIC_API_KEY"), Some("pateway-test"));
-    assert_eq!(env_str(&claude, "ANTHROPIC_AUTH_TOKEN"), None);
-    assert_eq!(
-        env_str(&claude, "ANTHROPIC_BASE_URL"),
-        Some("https://api.pateway.ai")
-    );
-
-    let codex = saved_provider(AppType::Codex, "patewayai-codex");
-    assert_eq!(
-        codex.settings_config["auth"]["OPENAI_API_KEY"],
-        "pateway-test"
-    );
-    let config = codex.settings_config["config"]
-        .as_str()
-        .expect("PatewayAI Codex config should be TOML");
-    assert!(config.contains("model = \"gpt-5.6-sol\""));
-    assert!(config.contains("base_url = \"https://api.pateway.ai/v1\""));
-    assert!(config.contains("name = \"patewayai\""));
-    assert!(config.contains("wire_api = \"responses\""));
 }
 
 #[test]

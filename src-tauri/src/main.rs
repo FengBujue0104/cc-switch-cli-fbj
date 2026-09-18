@@ -58,29 +58,15 @@ fn run(cli: Cli) -> Result<(), AppError> {
             cc_switch_lib::cli::commands::provider::ProviderCommand::Switch { id },
             cli.app,
         ),
-        Some(Commands::Mcp(cmd)) => cc_switch_lib::cli::commands::mcp::execute(cmd, cli.app),
-        Some(Commands::Prompts(cmd)) => {
-            cc_switch_lib::cli::commands::prompts::execute(cmd, cli.app)
-        }
-        Some(Commands::Skills(cmd)) => cc_switch_lib::cli::commands::skills::execute(cmd, cli.app),
         Some(Commands::Config(cmd)) => cc_switch_lib::cli::commands::config::execute(cmd, cli.app),
+        #[cfg(feature = "proxy")]
         Some(Commands::Proxy(cmd)) => cc_switch_lib::cli::commands::proxy::execute(cmd, cli.app),
         Some(Commands::Settings(cmd)) => cc_switch_lib::cli::commands::settings::execute(cmd),
-        Some(Commands::Failover(cmd)) => {
-            cc_switch_lib::cli::commands::failover::execute(cmd, cli.app)
-        }
-        Some(Commands::Sessions(cmd)) => {
-            cc_switch_lib::cli::commands::sessions::execute(cmd, cli.app)
-        }
-        Some(Commands::Hermes(cmd)) => cc_switch_lib::cli::commands::hermes::execute(cmd),
         #[cfg(unix)]
         Some(Commands::Start(cmd)) => cc_switch_lib::cli::commands::start::execute(cmd),
         #[cfg(unix)]
         Some(Commands::Daemon(cmd)) => cc_switch_lib::cli::commands::daemon::execute(cmd),
         Some(Commands::Env(cmd)) => cc_switch_lib::cli::commands::env::execute(cmd, cli.app),
-        Some(Commands::Deeplink(cmd)) => {
-            cc_switch_lib::cli::commands::deeplink::execute(cmd, cli.app)
-        }
         Some(Commands::Update(cmd)) => cc_switch_lib::cli::commands::update::execute(cmd),
         Some(Commands::Completions(cmd)) => cc_switch_lib::cli::commands::completions::execute(cmd),
         Some(Commands::Internal(cmd)) => cc_switch_lib::cli::commands::internal::execute(cmd),
@@ -98,7 +84,6 @@ fn command_requires_startup_state(command: &Option<Commands>) -> bool {
         | Some(Commands::Auth(_))
         | Some(Commands::Update(_))
         | Some(Commands::Internal(_))
-        | Some(Commands::Sessions(_))
         | Some(Commands::Settings(
             cc_switch_lib::cli::commands::settings::SettingsCommand::CodexAuthPreservation(_),
         )) => false,

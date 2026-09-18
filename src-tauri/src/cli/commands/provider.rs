@@ -788,16 +788,19 @@ pub enum ProviderCommand {
         model: Option<String>,
     },
     /// Test provider endpoint speed
+    #[command(hide = true)]
     Speedtest {
         /// Provider ID to test
         id: String,
     },
     /// Run stream health check for a provider
+    #[command(hide = true)]
     StreamCheck {
         /// Provider ID to check
         id: String,
     },
     /// Fetch remote model list for a provider
+    #[command(hide = true)]
     FetchModels {
         /// Provider ID to query
         #[arg(required_unless_present = "base_url")]
@@ -813,6 +816,7 @@ pub enum ProviderCommand {
         auth: Option<ModelFetchAuthArg>,
     },
     /// Query provider quota or usage
+    #[command(hide = true)]
     Quota {
         /// Provider ID to query
         id: String,
@@ -821,7 +825,7 @@ pub enum ProviderCommand {
         json: bool,
     },
     /// Configure provider Usage Query
-    #[command(subcommand)]
+    #[command(subcommand, hide = true)]
     UsageQuery(provider_usage_query::ProviderUsageQueryCommand),
     /// Export a Claude provider to a standalone settings file
     Export {

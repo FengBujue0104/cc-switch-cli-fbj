@@ -310,9 +310,12 @@ use crate::provider::ProviderManager;
 pub enum AppType {
     Claude,
     Codex,
+    #[cfg_attr(feature = "cli", value(skip))]
     Gemini,
+    #[cfg_attr(feature = "cli", value(skip))]
     OpenCode,
     Hermes,
+    #[cfg_attr(feature = "cli", value(skip))]
     OpenClaw,
     Pi,
 }
@@ -345,10 +348,7 @@ impl AppType {
         [
             AppType::Claude,
             AppType::Codex,
-            AppType::Gemini,
-            AppType::OpenCode,
             AppType::Hermes,
-            AppType::OpenClaw,
             AppType::Pi,
         ]
         .into_iter()

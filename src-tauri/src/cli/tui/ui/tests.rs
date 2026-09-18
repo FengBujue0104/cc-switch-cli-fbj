@@ -4203,29 +4203,27 @@ fn add_form_template_row_shows_only_the_current_selection() {
         "expected total template count, got: {row}"
     );
     assert!(
-        !row.contains("Claude Official") && !row.contains("PackyCode"),
+        !row.contains("Claude Official") && !row.contains("DeepSeek"),
         "non-selected templates must not be rendered inline, got: {row}"
     );
 
-    // With a sponsor selected the row must agree with the picker and drop the
-    // chip marker rather than showing "* PackyCode".
     let mut form = crate::cli::tui::form::ProviderAddFormState::new(AppType::Claude);
-    let sponsor_idx = form
+    let deepseek_idx = form
         .template_labels()
         .iter()
-        .position(|label| *label == "PackyCode")
-        .expect("PackyCode sponsor template");
-    form.template_idx = sponsor_idx;
+        .position(|label| *label == "DeepSeek")
+        .expect("DeepSeek builtin template");
+    form.template_idx = deepseek_idx;
     app.form = Some(crate::cli::tui::form::FormState::ProviderAdd(form));
 
     let buf = render(&app, &data);
     let row = (0..buf.area.height)
         .map(|y| line_at(&buf, y))
-        .find(|line| line.contains("PackyCode"))
-        .expect("template row should show the selected sponsor");
+        .find(|line| line.contains("DeepSeek"))
+        .expect("template row should show the selected builtin");
     assert!(
-        !row.contains("* PackyCode"),
-        "the template row must strip the sponsor chip marker, got: {row}"
+        !row.contains("* DeepSeek"),
+        "builtin labels have no sponsor chip marker, got: {row}"
     );
 }
 
@@ -4289,14 +4287,9 @@ fn provider_template_picker_overlay_groups_builtins_and_sponsors() {
         .collect::<Vec<_>>()
         .join("\n");
 
-    assert!(screen.contains("Built-in"), "{screen}");
-    assert!(screen.contains("Sponsors"), "{screen}");
+    assert!(!screen.contains("Sponsors"), "{screen}");
     assert!(screen.contains("Claude Official"), "{screen}");
-    assert!(screen.contains("PackyCode"), "{screen}");
-    assert!(
-        !screen.contains("* PackyCode"),
-        "sponsor rows drop the chip marker under the Sponsors header: {screen}"
-    );
+    assert!(screen.contains("DeepSeek"), "{screen}");
 }
 
 /// In a short terminal the picker cannot show every row, so the scroll window
@@ -4328,12 +4321,7 @@ fn provider_template_picker_overlay_scrolls_selection_into_view() {
 
     assert!(
         screen.contains(&last_label),
-        "last sponsor ({last_label}) must scroll into view in a short terminal: {screen}"
-    );
-    // Proof the viewport is actually constrained: the first row scrolled off.
-    assert!(
-        !screen.contains("Built-in"),
-        "expected the top of the list to scroll away: {screen}"
+        "last template ({last_label}) must remain reachable: {screen}"
     );
 }
 

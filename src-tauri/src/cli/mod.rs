@@ -24,8 +24,8 @@ use crate::app_config::AppType;
 #[command(
     name = "cc-switch",
     version,
-    about = "All-in-One Assistant for Claude Code, Codex, Gemini & OpenCode CLI",
-    long_about = "Unified management for Claude Code, Codex, Gemini, and OpenCode CLI provider configurations, MCP servers, skills, prompts, local proxy routes, and environment checks.\n\nRun without arguments to enter interactive mode."
+    about = "Provider switcher for Claude Code, Codex, Hermes, and Pi",
+    long_about = "Manage Claude Code, Codex, Hermes, and Pi provider configurations. Optional local proxy converts API formats. Run without arguments to enter interactive mode."
 )]
 pub struct Cli {
     /// Specify the application type
@@ -46,7 +46,7 @@ pub enum Commands {
     #[command(subcommand)]
     Auth(commands::auth::AuthCommand),
 
-    /// Manage providers (list, switch, export, speedtest, stream-check, fetch-models, quota)
+    /// Manage providers (list, switch, add, edit, delete)
     #[command(subcommand)]
     Provider(commands::provider::ProviderCommand),
 
@@ -56,41 +56,18 @@ pub enum Commands {
         id: String,
     },
 
-    /// Manage MCP servers (list, add, edit, delete, sync)
-    #[command(subcommand)]
-    Mcp(commands::mcp::McpCommand),
-
-    /// Manage prompts (list, current, live, import, activate, create, rename, edit)
-    #[command(subcommand)]
-    Prompts(commands::prompts::PromptsCommand),
-
-    /// Manage skills and skill repositories
-    #[command(subcommand)]
-    Skills(commands::skills::SkillsCommand),
-
-    /// Manage configuration, backups, common snippets, and WebDAV sync
+    /// Manage configuration backups and common snippets
     #[command(subcommand)]
     Config(commands::config::ConfigCommand),
 
-    /// Manage local multi-app proxy
+    /// Optional local proxy plugin (API format conversion)
+    #[cfg(feature = "proxy")]
     #[command(subcommand)]
     Proxy(commands::proxy::ProxyCommand),
 
     /// Manage persisted UI and integration settings
     #[command(subcommand)]
     Settings(commands::settings::SettingsCommand),
-
-    /// Manage automatic failover and provider queue
-    #[command(subcommand)]
-    Failover(commands::failover::FailoverCommand),
-
-    /// Manage saved assistant sessions
-    #[command(subcommand)]
-    Sessions(commands::sessions::SessionsCommand),
-
-    /// Hermes-specific commands (memory blobs etc.)
-    #[command(subcommand)]
-    Hermes(commands::hermes::HermesCommand),
 
     /// Start an app with a provider selector without switching the global current provider
     #[cfg(unix)]
@@ -105,9 +82,6 @@ pub enum Commands {
     /// Manage environment variables and local CLI tool checks
     #[command(subcommand)]
     Env(commands::env::EnvCommand),
-
-    /// Import a resource (provider/mcp/prompt/skill) from a ccswitch:// deep link URL
-    Deeplink(commands::deeplink::DeeplinkCommand),
 
     /// Update cc-switch binary to latest release
     Update(commands::update::UpdateCommand),
@@ -148,25 +122,24 @@ mod tests {
     };
 
     #[test]
-    fn long_help_mentions_prompts_and_proxy_routes() {
+    fn long_help_mentions_provider_switcher_scope() {
         let mut cmd = Cli::command();
         let help = cmd.render_long_help().to_string();
 
-        assert!(help.contains("prompts, local proxy routes, and environment checks"));
+        assert!(help.contains("Claude Code, Codex, Hermes, and Pi"));
     }
 
+    #[cfg(feature = "legacy-commands")]
     #[test]
-    fn skills_help_uses_current_storage_description() {
+    fn skills_command_is_removed() {
         let mut cmd = Cli::command();
-        let skills = cmd
-            .find_subcommand_mut("skills")
-            .expect("skills subcommand should exist");
-        let help = skills.render_long_help().to_string();
-
-        assert!(!help.contains("skills.json"));
-        assert!(help.contains("SSOT + database state"));
+        assert!(
+            cmd.find_subcommand_mut("skills").is_none(),
+            "skills management is out of scope for this fork"
+        );
     }
 
+    #[cfg(feature = "legacy-commands")]
     #[test]
     fn skills_market_command_parses() {
         let cli = Cli::parse_from([
@@ -468,6 +441,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "legacy-commands")]
     #[test]
     fn parses_failover_enable_subcommand() {
         let cli = Cli::parse_from(["cc-switch", "failover", "enable"]);
@@ -478,6 +452,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "legacy-commands")]
     #[test]
     fn parses_failover_disable_subcommand() {
         let cli = Cli::parse_from(["cc-switch", "failover", "disable"]);
@@ -488,6 +463,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "legacy-commands")]
     #[test]
     fn parses_failover_list_subcommand() {
         let cli = Cli::parse_from(["cc-switch", "failover", "list"]);
@@ -498,6 +474,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "legacy-commands")]
     #[test]
     fn parses_failover_add_subcommand() {
         let cli = Cli::parse_from(["cc-switch", "failover", "add", "p1"]);
@@ -510,6 +487,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "legacy-commands")]
     #[test]
     fn parses_failover_remove_subcommand() {
         let cli = Cli::parse_from(["cc-switch", "failover", "remove", "p1"]);
@@ -522,6 +500,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "legacy-commands")]
     #[test]
     fn parses_failover_move_subcommand() {
         let cli = Cli::parse_from(["cc-switch", "failover", "move", "p1", "up"]);
@@ -541,6 +520,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "legacy-commands")]
     #[test]
     fn parses_failover_clear_subcommand() {
         let cli = Cli::parse_from(["cc-switch", "failover", "clear", "--yes"]);
@@ -553,6 +533,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "legacy-commands")]
     #[test]
     fn parses_failover_show_with_app() {
         let cli = Cli::parse_from(["cc-switch", "--app", "codex", "failover", "show"]);
@@ -564,6 +545,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "legacy-commands")]
     #[test]
     fn parses_sessions_list_subcommand() {
         let cli = Cli::parse_from(["cc-switch", "sessions", "list", "--all", "--json"]);
@@ -582,6 +564,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "legacy-commands")]
     #[test]
     fn parses_sessions_list_with_backend_provider_id() {
         let cli = Cli::parse_from(["cc-switch", "sessions", "list", "--provider", "opencode"]);
@@ -599,6 +582,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "legacy-commands")]
     #[test]
     fn parses_sessions_sync_usage_subcommand() {
         let cli = Cli::parse_from([
@@ -624,6 +608,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "legacy-commands")]
     #[test]
     fn parses_sessions_show_with_provider() {
         let cli = Cli::parse_from([
@@ -651,6 +636,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "legacy-commands")]
     #[test]
     fn parses_sessions_resume_print_subcommand() {
         let cli = Cli::parse_from(["cc-switch", "sessions", "resume", "abc", "--print"]);
@@ -668,6 +654,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "legacy-commands")]
     #[test]
     fn parses_sessions_delete_yes_subcommand() {
         let cli = Cli::parse_from(["cc-switch", "sessions", "delete", "abc", "--yes"]);
@@ -970,6 +957,7 @@ mod tests {
         assert!(help.contains("cc-switch start codex demo -- --model gpt-5.4"));
     }
 
+    #[cfg(feature = "legacy-commands")]
     #[test]
     fn parses_prompts_live_subcommand() {
         let cli = Cli::parse_from(["cc-switch", "prompts", "live"]);
@@ -980,6 +968,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "legacy-commands")]
     #[test]
     fn parses_prompts_import_subcommand() {
         let cli = Cli::parse_from(["cc-switch", "prompts", "import"]);
@@ -1812,6 +1801,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "legacy-commands")]
     #[test]
     fn parses_mcp_enable_with_apps() {
         let cli = Cli::parse_from(["cc-switch", "mcp", "enable", "s1", "--apps", "claude,codex"]);
@@ -1825,6 +1815,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "legacy-commands")]
     #[test]
     fn parses_mcp_set_apps_repeated_flags() {
         let cli = Cli::parse_from([
@@ -1847,6 +1838,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "legacy-commands")]
     #[test]
     fn parses_skills_enable_with_apps() {
         let cli = Cli::parse_from(["cc-switch", "skills", "enable", "hello", "--apps", "codex"]);
@@ -1863,6 +1855,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "legacy-commands")]
     #[test]
     fn parses_skills_storage_location_query_and_values() {
         let query = Cli::parse_from(["cc-switch", "skills", "storage-location"]);
@@ -1894,6 +1887,7 @@ mod tests {
         ));
     }
 
+    #[cfg(feature = "legacy-commands")]
     #[test]
     fn parses_manual_skill_update_commands() {
         let check = Cli::parse_from(["cc-switch", "skills", "check-updates"]);
@@ -1927,12 +1921,14 @@ mod tests {
         ));
     }
 
+    #[cfg(feature = "legacy-commands")]
     #[test]
     fn manual_skill_update_requires_exactly_one_target() {
         assert!(Cli::try_parse_from(["cc-switch", "skills", "update"]).is_err());
         assert!(Cli::try_parse_from(["cc-switch", "skills", "update", "hello", "--all"]).is_err());
     }
 
+    #[cfg(feature = "legacy-commands")]
     #[test]
     fn parses_skills_set_apps_repeated_flags() {
         let cli = Cli::parse_from([
@@ -1958,6 +1954,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "legacy-commands")]
     #[test]
     fn parses_skills_import_from_apps_apps_before_directory() {
         let cli = Cli::parse_from([
@@ -1981,6 +1978,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "legacy-commands")]
     #[test]
     fn parses_skills_repo_enable_subcommand() {
         let cli = Cli::parse_from(["cc-switch", "skills", "repos", "enable", "foo/bar"]);
@@ -1995,6 +1993,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "legacy-commands")]
     #[test]
     fn parses_skills_repo_disable_subcommand() {
         let cli = Cli::parse_from(["cc-switch", "skills", "repos", "disable", "foo/bar"]);

@@ -11,26 +11,32 @@ fn template_index_by_label(app_type: AppType, label: &str) -> usize {
         .expect("template should exist")
 }
 
+#[ignore = "sponsor presets removed from personal fork"]
 fn claudeapi_template_index(app_type: AppType) -> usize {
     template_index_by_label(app_type, "ClaudeAPI")
 }
 
+#[ignore = "sponsor presets removed from personal fork"]
 fn packycode_template_index(app_type: AppType) -> usize {
     template_index_by_label(app_type, "PackyCode")
 }
 
+#[ignore = "sponsor presets removed from personal fork"]
 fn aicodemirror_template_index(app_type: AppType) -> usize {
     template_index_by_label(app_type, "AICodeMirror")
 }
 
+#[ignore = "sponsor presets removed from personal fork"]
 fn cubence_template_index(app_type: AppType) -> usize {
     template_index_by_label(app_type, "Cubence")
 }
 
+#[ignore = "sponsor presets removed from personal fork"]
 fn runapi_template_index(app_type: AppType) -> usize {
     template_index_by_label(app_type, "RunAPI")
 }
 
+#[ignore = "sponsor presets removed from personal fork"]
 fn dds_template_index(app_type: AppType) -> usize {
     template_index_by_label(app_type, "DDS")
 }
@@ -79,34 +85,13 @@ fn assert_cli_template_matches_tui_serializer(
     );
 }
 
-/// Chip labels keep the ASCII `"* "` marker for the chip-row consumers (the
-/// MCP form and the CLI template chooser); the provider form's flat labels
-/// strip it, because its collapsed row and picker show sponsors under an
-/// explicit Sponsors header instead.
 #[test]
-fn provider_add_form_template_labels_use_ascii_prefix_for_packycode() {
-    let chip_labels =
-        crate::provider_preset_sponsors::sponsor_provider_presets_for_app(&AppType::Claude)
-            .iter()
-            .map(|preset| preset.chip_label)
-            .collect::<Vec<_>>();
-
-    assert!(
-        chip_labels.contains(&"* PackyCode"),
-        "expected PackyCode chip label to use ASCII prefix for alignment stability"
-    );
-    assert!(
-        chip_labels.contains(&"* ClaudeAPI"),
-        "expected ClaudeAPI chip label to use ASCII prefix for alignment stability"
-    );
-
+#[ignore = "sponsor presets removed from personal fork"]
+fn provider_add_form_template_labels_omit_sponsor_presets() {
     let labels = ProviderAddFormState::new(AppType::Claude).template_labels();
-    assert!(labels.contains(&"PackyCode"), "{labels:?}");
-    assert!(labels.contains(&"ClaudeAPI"), "{labels:?}");
-    assert!(
-        labels.iter().all(|label| !label.starts_with("* ")),
-        "provider template labels must drop the chip marker: {labels:?}"
-    );
+    assert!(!labels.iter().any(|label| label.contains("PackyCode")));
+    assert!(!labels.iter().any(|label| label.contains("ClaudeAPI")));
+    assert!(labels.iter().all(|label| !label.starts_with("* ")));
 }
 
 #[test]
@@ -118,24 +103,10 @@ fn provider_add_form_template_labels_follow_explicit_support_matrix() {
             "Custom",
             "Claude Official",
             "Codex",
-            "AICodeMirror",
-            "ClaudeAPI",
-            "PatewayAI",
-            "Cubence",
-            "OpenModel",
-            "RunAPI",
-            "Qiniu",
-            "FennoAI",
-            "PackyCode",
-            "DDS",
             "DeepSeek",
             "Zhipu GLM",
-            "Zhipu GLM en",
-            "ModelScope",
             "MiniMax",
             "Xiaomi MiMo",
-            "Xiaomi MiMo Token Plan (China)",
-            "OpenCode Go",
             "OpenRouter",
         ]
     );
@@ -146,93 +117,25 @@ fn provider_add_form_template_labels_follow_explicit_support_matrix() {
         vec![
             "Custom",
             "OpenAI Official",
-            "AICodeMirror",
-            "PatewayAI",
-            "Cubence",
-            "OpenModel",
-            "RunAPI",
-            "Qiniu",
-            "FennoAI",
-            "PackyCode",
-            "DDS",
             "DeepSeek",
             "Zhipu GLM",
-            "Zhipu GLM en",
-            "ModelScope",
             "MiniMax",
             "Xiaomi MiMo",
-            "Xiaomi MiMo Token Plan (China)",
-            "OpenCode Go",
             "OpenRouter",
         ]
     );
 
     let gemini_labels = ProviderAddFormState::new(AppType::Gemini).template_labels();
-    assert_eq!(
-        gemini_labels,
-        vec![
-            "Custom",
-            "Google OAuth",
-            "AICodeMirror",
-            "Cubence",
-            "OpenModel",
-            "Qiniu",
-            "PackyCode",
-        ]
-    );
+    assert_eq!(gemini_labels, vec!["Custom", "Google OAuth"]);
 
     let opencode_labels = ProviderAddFormState::new(AppType::OpenCode).template_labels();
-    assert_eq!(
-        opencode_labels,
-        vec![
-            "Custom",
-            "AICodeMirror",
-            "Cubence",
-            "OpenModel",
-            "RunAPI",
-            "Qiniu",
-            "FennoAI",
-            "PackyCode"
-        ]
-    );
-    assert!(
-        !opencode_labels.contains(&"ClaudeAPI"),
-        "OpenCode should not expose Claude-only sponsor presets"
-    );
+    assert_eq!(opencode_labels, vec!["Custom"]);
 
     let hermes_labels = ProviderAddFormState::new(AppType::Hermes).template_labels();
-    assert_eq!(
-        hermes_labels,
-        vec![
-            "Custom",
-            "AICodeMirror",
-            "Cubence",
-            "OpenModel",
-            "RunAPI",
-            "Qiniu",
-            "FennoAI",
-            "PackyCode"
-        ]
-    );
+    assert_eq!(hermes_labels, vec!["Custom"]);
 
     let openclaw_labels = ProviderAddFormState::new(AppType::OpenClaw).template_labels();
-    assert_eq!(
-        openclaw_labels,
-        vec![
-            "Custom",
-            "AICodeMirror",
-            "Cubence",
-            "OpenModel",
-            "RunAPI",
-            "Qiniu",
-            "FennoAI",
-            "PackyCode"
-        ]
-    );
-    assert!(
-        !openclaw_labels.contains(&"ClaudeAPI"),
-        "OpenClaw should not expose Claude-only sponsor presets"
-    );
+    assert_eq!(openclaw_labels, vec!["Custom"]);
 }
 
 #[test]
@@ -244,19 +147,9 @@ fn provider_add_form_pi_exposes_only_the_selected_template_scope() {
             "Custom",
             "DeepSeek",
             "Zhipu GLM",
-            "Zhipu GLM en",
-            "ModelScope",
             "MiniMax",
             "Xiaomi MiMo",
-            "Xiaomi MiMo Token Plan (China)",
-            "OpenCode Go",
             "OpenRouter",
-            "PackyCode",
-            "AICodeMirror",
-            "FennoAI",
-            "RunAPI",
-            "Qiniu",
-            "Cubence",
         ]
     );
 }
@@ -270,12 +163,9 @@ fn provider_add_form_pi_picker_uses_family_sections() {
             ProviderTemplateSection::BuiltIn
         ))
     );
-    assert_eq!(
-        rows.get(11),
-        Some(&ProviderTemplateRow::Header(
-            ProviderTemplateSection::Sponsors
-        ))
-    );
+    assert!(rows
+        .iter()
+        .all(|row| !matches!(row, ProviderTemplateRow::Header(ProviderTemplateSection::Sponsors))));
 
     let items = rows
         .iter()
@@ -288,19 +178,11 @@ fn provider_add_form_pi_picker_uses_family_sections() {
             ProviderTemplateRow::Header(_) => None,
         })
         .collect::<Vec<_>>();
-    assert_eq!(items.len(), 16);
+    assert_eq!(items.len(), 6);
     assert_eq!(items[0], (0, "Custom", ProviderTemplateSection::BuiltIn));
     assert_eq!(
-        items[9],
-        (9, "OpenRouter", ProviderTemplateSection::BuiltIn)
-    );
-    assert_eq!(
-        items[10],
-        (10, "PackyCode", ProviderTemplateSection::Sponsors)
-    );
-    assert_eq!(
-        items[15],
-        (15, "Cubence", ProviderTemplateSection::Sponsors)
+        items[5],
+        (5, "OpenRouter", ProviderTemplateSection::BuiltIn)
     );
 }
 
@@ -371,24 +253,6 @@ fn provider_add_form_claude_builtin_presets_match_upstream_fields() {
             ClaudeApiKeyField::AuthToken,
         ),
         (
-            "Zhipu GLM en",
-            "https://api.z.ai/api/anthropic",
-            "glm-5.1",
-            "glm-5.1",
-            "glm-5.1",
-            "glm-5.1",
-            ClaudeApiKeyField::AuthToken,
-        ),
-        (
-            "ModelScope",
-            "https://api-inference.modelscope.cn",
-            "ZhipuAI/GLM-5.2",
-            "ZhipuAI/GLM-5.2",
-            "ZhipuAI/GLM-5.2",
-            "ZhipuAI/GLM-5.2",
-            ClaudeApiKeyField::AuthToken,
-        ),
-        (
             "MiniMax",
             "https://api.minimaxi.com/anthropic",
             "MiniMax-M2.7",
@@ -405,24 +269,6 @@ fn provider_add_form_claude_builtin_presets_match_upstream_fields() {
             "mimo-v2.5-pro",
             "mimo-v2.5-pro",
             ClaudeApiKeyField::AuthToken,
-        ),
-        (
-            "Xiaomi MiMo Token Plan (China)",
-            "https://token-plan-cn.xiaomimimo.com/anthropic",
-            "mimo-v2.5-pro",
-            "mimo-v2.5-pro",
-            "mimo-v2.5-pro",
-            "mimo-v2.5-pro",
-            ClaudeApiKeyField::AuthToken,
-        ),
-        (
-            "OpenCode Go",
-            "https://opencode.ai/zen/go",
-            "deepseek-v4-flash",
-            "deepseek-v4-flash",
-            "deepseek-v4-flash",
-            "deepseek-v4-flash",
-            ClaudeApiKeyField::ApiKey,
         ),
         (
             "OpenRouter",
@@ -488,22 +334,6 @@ fn provider_add_form_codex_builtin_presets_match_upstream_fields() {
             1,
         ),
         (
-            "Zhipu GLM en",
-            "zhipu_glm_en",
-            "https://api.z.ai/api/coding/paas/v4",
-            "glm-5.2",
-            "openai_chat",
-            1,
-        ),
-        (
-            "ModelScope",
-            "modelscope",
-            "https://api-inference.modelscope.cn/v1",
-            "ZhipuAI/GLM-5.2",
-            "openai_chat",
-            1,
-        ),
-        (
             "MiniMax",
             "minimax",
             "https://api.minimaxi.com/v1",
@@ -518,22 +348,6 @@ fn provider_add_form_codex_builtin_presets_match_upstream_fields() {
             "mimo-v2.5-pro",
             "openai_responses",
             2,
-        ),
-        (
-            "Xiaomi MiMo Token Plan (China)",
-            "xiaomi_mimo_token_plan",
-            "https://token-plan-cn.xiaomimimo.com/v1",
-            "mimo-v2.5-pro",
-            "openai_responses",
-            2,
-        ),
-        (
-            "OpenCode Go",
-            "opencode_go",
-            "https://opencode.ai/zen/go/v1",
-            "glm-5.2",
-            "openai_chat",
-            6,
         ),
         (
             "OpenRouter",
@@ -589,18 +403,6 @@ fn provider_add_form_codex_builtin_presets_match_upstream_fields() {
         1_048_576
     );
 
-    let mut opencode = ProviderAddFormState::new(AppType::Codex);
-    opencode.apply_template(template_index_by_label(AppType::Codex, "OpenCode Go"), &[]);
-    let opencode = opencode.to_provider_json_value();
-    assert_eq!(
-        opencode["meta"]["codexChatReasoning"]["effortValueMode"],
-        "zen"
-    );
-    assert_eq!(
-        opencode["settingsConfig"]["modelCatalog"]["models"][4]["reasoningLevels"],
-        json!(["low", "high", "max"])
-    );
-
     let mut minimax = ProviderAddFormState::new(AppType::Codex);
     minimax.apply_template(template_index_by_label(AppType::Codex, "MiniMax"), &[]);
     let minimax = minimax.to_provider_json_value();
@@ -621,8 +423,6 @@ fn cli_provider_templates_match_tui_serializer_output() {
             ProviderAddTemplate::ClaudeOfficial,
             "Claude Official",
         ),
-        (AppType::Claude, ProviderAddTemplate::Patewayai, "PatewayAI"),
-        (AppType::Codex, ProviderAddTemplate::Patewayai, "PatewayAI"),
         (AppType::Claude, ProviderAddTemplate::CodexOauth, "Codex"),
         (
             AppType::Codex,
@@ -634,69 +434,8 @@ fn cli_provider_templates_match_tui_serializer_output() {
             ProviderAddTemplate::GoogleOauth,
             "Google OAuth",
         ),
-        (AppType::Claude, ProviderAddTemplate::Claudeapi, "ClaudeAPI"),
-        (AppType::Claude, ProviderAddTemplate::Packycode, "PackyCode"),
-        (AppType::Claude, ProviderAddTemplate::Openmodel, "OpenModel"),
-        (AppType::Codex, ProviderAddTemplate::Openmodel, "OpenModel"),
-        (AppType::Gemini, ProviderAddTemplate::Openmodel, "OpenModel"),
-        (
-            AppType::OpenCode,
-            ProviderAddTemplate::Openmodel,
-            "OpenModel",
-        ),
-        (AppType::Hermes, ProviderAddTemplate::Openmodel, "OpenModel"),
-        (
-            AppType::OpenClaw,
-            ProviderAddTemplate::Openmodel,
-            "OpenModel",
-        ),
-        (
-            AppType::Codex,
-            ProviderAddTemplate::Aicodemirror,
-            "AICodeMirror",
-        ),
-        (AppType::Codex, ProviderAddTemplate::Runapi, "RunAPI"),
         (AppType::Codex, ProviderAddTemplate::Deepseek, "DeepSeek"),
-        (AppType::Gemini, ProviderAddTemplate::Cubence, "Cubence"),
-        (AppType::Claude, ProviderAddTemplate::Dds, "DDS"),
-        (
-            AppType::OpenCode,
-            ProviderAddTemplate::Aicodemirror,
-            "AICodeMirror",
-        ),
-        (AppType::OpenCode, ProviderAddTemplate::Cubence, "Cubence"),
-        (AppType::OpenCode, ProviderAddTemplate::Runapi, "RunAPI"),
-        (
-            AppType::OpenCode,
-            ProviderAddTemplate::Packycode,
-            "PackyCode",
-        ),
-        (AppType::Hermes, ProviderAddTemplate::Cubence, "Cubence"),
-        (AppType::Hermes, ProviderAddTemplate::Runapi, "RunAPI"),
-        (AppType::Hermes, ProviderAddTemplate::Packycode, "PackyCode"),
-        (
-            AppType::OpenClaw,
-            ProviderAddTemplate::Aicodemirror,
-            "AICodeMirror",
-        ),
-        (AppType::OpenClaw, ProviderAddTemplate::Cubence, "Cubence"),
-        (AppType::OpenClaw, ProviderAddTemplate::Runapi, "RunAPI"),
-        (
-            AppType::OpenClaw,
-            ProviderAddTemplate::Packycode,
-            "PackyCode",
-        ),
-        (AppType::Claude, ProviderAddTemplate::Qiniu, "Qiniu"),
-        (AppType::Codex, ProviderAddTemplate::Qiniu, "Qiniu"),
-        (AppType::Gemini, ProviderAddTemplate::Qiniu, "Qiniu"),
-        (AppType::OpenCode, ProviderAddTemplate::Qiniu, "Qiniu"),
-        (AppType::Hermes, ProviderAddTemplate::Qiniu, "Qiniu"),
-        (AppType::OpenClaw, ProviderAddTemplate::Qiniu, "Qiniu"),
-        (AppType::Claude, ProviderAddTemplate::Fenno, "FennoAI"),
-        (AppType::Codex, ProviderAddTemplate::Fenno, "FennoAI"),
-        (AppType::OpenCode, ProviderAddTemplate::Fenno, "FennoAI"),
-        (AppType::Hermes, ProviderAddTemplate::Fenno, "FennoAI"),
-        (AppType::OpenClaw, ProviderAddTemplate::Fenno, "FennoAI"),
+        (AppType::Claude, ProviderAddTemplate::Deepseek, "DeepSeek"),
     ] {
         assert_cli_template_matches_tui_serializer(app_type, template, label);
     }
@@ -921,6 +660,7 @@ fn provider_add_form_template_change_clears_hidden_full_url_state() {
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_aicodemirror_preset_keeps_affiliate_register_url_in_metadata() {
     let claude_presets = super::provider_templates::provider_sponsor_presets(&AppType::Claude);
     let aicodemirror = claude_presets
@@ -941,6 +681,7 @@ fn provider_add_form_aicodemirror_preset_keeps_affiliate_register_url_in_metadat
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_claudeapi_preset_keeps_affiliate_register_url_in_metadata() {
     let claude_presets = super::provider_templates::provider_sponsor_presets(&AppType::Claude);
     let claudeapi = claude_presets
@@ -971,6 +712,7 @@ fn provider_add_form_google_oauth_template_marks_official_metadata() {
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_dds_preset_keeps_affiliate_register_url_in_metadata() {
     let claude_presets = super::provider_templates::provider_sponsor_presets(&AppType::Claude);
     let dds = claude_presets
@@ -982,6 +724,7 @@ fn provider_add_form_dds_preset_keeps_affiliate_register_url_in_metadata() {
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_cubence_preset_keeps_affiliate_register_url_in_metadata() {
     let claude_presets = super::provider_templates::provider_sponsor_presets(&AppType::Claude);
     let cubence = claude_presets
@@ -996,6 +739,7 @@ fn provider_add_form_cubence_preset_keeps_affiliate_register_url_in_metadata() {
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_runapi_preset_keeps_affiliate_register_url_in_metadata() {
     let claude_presets = super::provider_templates::provider_sponsor_presets(&AppType::Claude);
     let runapi = claude_presets
@@ -1007,6 +751,7 @@ fn provider_add_form_runapi_preset_keeps_affiliate_register_url_in_metadata() {
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_claudeapi_template_claude_sets_base_url_and_partner_meta() {
     let mut form = ProviderAddFormState::new(AppType::Claude);
     let existing_ids = Vec::<String>::new();
@@ -1026,6 +771,7 @@ fn provider_add_form_claudeapi_template_claude_sets_base_url_and_partner_meta() 
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_dds_template_claude_sets_base_url_and_partner_meta() {
     let mut form = ProviderAddFormState::new(AppType::Claude);
     let existing_ids = Vec::<String>::new();
@@ -1057,6 +803,7 @@ fn provider_add_form_dds_template_claude_sets_base_url_and_partner_meta() {
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_dds_template_codex_sets_base_url_and_partner_meta() {
     let mut form = ProviderAddFormState::new(AppType::Codex);
     let existing_ids = Vec::<String>::new();
@@ -1091,6 +838,7 @@ fn provider_add_form_dds_template_codex_sets_base_url_and_partner_meta() {
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_cubence_template_claude_sets_base_url_and_partner_meta() {
     let mut form = ProviderAddFormState::new(AppType::Claude);
     let existing_ids = Vec::<String>::new();
@@ -1122,6 +870,7 @@ fn provider_add_form_cubence_template_claude_sets_base_url_and_partner_meta() {
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_cubence_template_codex_sets_base_url_and_partner_meta() {
     let mut form = ProviderAddFormState::new(AppType::Codex);
     let existing_ids = Vec::<String>::new();
@@ -1153,6 +902,7 @@ fn provider_add_form_cubence_template_codex_sets_base_url_and_partner_meta() {
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_cubence_template_gemini_sets_base_url_and_partner_meta() {
     let mut form = ProviderAddFormState::new(AppType::Gemini);
 
@@ -1174,6 +924,7 @@ fn provider_add_form_cubence_template_gemini_sets_base_url_and_partner_meta() {
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_cubence_template_opencode_sets_base_url_and_partner_meta() {
     let mut form = ProviderAddFormState::new(AppType::OpenCode);
 
@@ -1200,6 +951,7 @@ fn provider_add_form_cubence_template_opencode_sets_base_url_and_partner_meta() 
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_cubence_template_hermes_sets_base_url_and_partner_meta() {
     let mut form = ProviderAddFormState::new(AppType::Hermes);
 
@@ -1230,6 +982,7 @@ fn provider_add_form_cubence_template_hermes_sets_base_url_and_partner_meta() {
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_cubence_template_openclaw_sets_base_url_and_partner_meta() {
     let mut form = ProviderAddFormState::new(AppType::OpenClaw);
 
@@ -1265,6 +1018,7 @@ fn provider_add_form_cubence_template_openclaw_sets_base_url_and_partner_meta() 
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_runapi_template_claude_sets_upstream_partner_shape() {
     let mut form = ProviderAddFormState::new(AppType::Claude);
 
@@ -1284,6 +1038,7 @@ fn provider_add_form_runapi_template_claude_sets_upstream_partner_shape() {
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_claude_sponsor_template_is_independent_of_previous_codex_template() {
     let mut form = ProviderAddFormState::new(AppType::Claude);
 
@@ -1316,6 +1071,7 @@ fn provider_add_form_claude_sponsor_template_is_independent_of_previous_codex_te
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_runapi_template_codex_sets_v1_base_url() {
     let mut form = ProviderAddFormState::new(AppType::Codex);
 
@@ -1338,6 +1094,7 @@ fn provider_add_form_runapi_template_codex_sets_v1_base_url() {
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_runapi_template_opencode_matches_upstream_anthropic_shape() {
     let mut form = ProviderAddFormState::new(AppType::OpenCode);
 
@@ -1369,6 +1126,7 @@ fn provider_add_form_runapi_template_opencode_matches_upstream_anthropic_shape()
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_runapi_template_hermes_matches_upstream_anthropic_shape() {
     let mut form = ProviderAddFormState::new(AppType::Hermes);
 
@@ -1398,6 +1156,7 @@ fn provider_add_form_runapi_template_hermes_matches_upstream_anthropic_shape() {
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_runapi_template_openclaw_matches_upstream_anthropic_shape() {
     let mut form = ProviderAddFormState::new(AppType::OpenClaw);
 
@@ -2781,6 +2540,7 @@ fn provider_add_form_claude_preserves_custom_attribution_when_untouched() {
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_packycode_template_claude_sets_partner_meta_and_base_url() {
     let mut form = ProviderAddFormState::new(AppType::Claude);
     let existing_ids = Vec::<String>::new();
@@ -2800,6 +2560,7 @@ fn provider_add_form_packycode_template_claude_sets_partner_meta_and_base_url() 
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_packycode_template_codex_sets_partner_meta_and_base_url() {
     let mut form = ProviderAddFormState::new(AppType::Codex);
     let existing_ids = Vec::<String>::new();
@@ -2885,6 +2646,7 @@ fn provider_add_form_codex_template_switch_clears_local_routing_state() {
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_codex_sponsor_switch_clears_previous_template_credentials_and_features() {
     let mut form = ProviderAddFormState::new(AppType::Codex);
     form.apply_template(packycode_template_index(AppType::Codex), &[]);
@@ -2913,6 +2675,7 @@ fn provider_add_form_codex_sponsor_switch_clears_previous_template_credentials_a
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_packycode_template_gemini_sets_partner_meta_and_base_url() {
     let mut form = ProviderAddFormState::new(AppType::Gemini);
     let existing_ids = Vec::<String>::new();
@@ -2932,6 +2695,7 @@ fn provider_add_form_packycode_template_gemini_sets_partner_meta_and_base_url() 
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_aicodemirror_template_claude_sets_partner_meta_and_base_url() {
     let mut form = ProviderAddFormState::new(AppType::Claude);
 
@@ -2957,6 +2721,7 @@ fn provider_add_form_aicodemirror_template_claude_sets_partner_meta_and_base_url
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_patewayai_template_uses_api_key_auth_and_upstream_base_url() {
     let mut form = ProviderAddFormState::new(AppType::Claude);
 
@@ -2979,6 +2744,7 @@ fn provider_add_form_patewayai_template_uses_api_key_auth_and_upstream_base_url(
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_aicodemirror_template_codex_preserves_third_party_auth_behavior() {
     let mut form = ProviderAddFormState::new(AppType::Codex);
 
@@ -3020,6 +2786,7 @@ fn provider_add_form_codex_custom_defaults_to_upstream_model() {
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_aicodemirror_template_gemini_sets_partner_meta_and_base_url() {
     let mut form = ProviderAddFormState::new(AppType::Gemini);
 
@@ -4358,6 +4125,7 @@ fn provider_add_form_claude_without_official_category_keeps_third_party_fields_v
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_codex_packycode_hides_env_key_field() {
     let mut form = ProviderAddFormState::new(AppType::Codex);
     let existing_ids = Vec::<String>::new();
@@ -4470,6 +4238,7 @@ fn provider_add_form_gemini_includes_model_in_env_when_set() {
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_gemini_sponsor_preset_clears_previous_api_key() {
     let mut form = ProviderAddFormState::new(AppType::Gemini);
     form.gemini_api_key.set("AIza-from-previous-provider");
@@ -6103,6 +5872,7 @@ fn provider_add_form_disabling_common_config_preserves_provider_specific_env_key
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_opencode_exposes_supported_sponsor_presets() {
     let form = ProviderAddFormState::new(AppType::OpenCode);
     let labels = form.template_labels();
@@ -6289,6 +6059,7 @@ fn provider_add_form_hermes_loads_legacy_aliases_and_saves_canonical_shape() {
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_aicodemirror_template_opencode_matches_serializer_and_loader_semantics() {
     let mut form = ProviderAddFormState::new(AppType::OpenCode);
 
@@ -6648,6 +6419,7 @@ fn provider_add_form_openclaw_uses_upstream_default_api_protocol() {
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_aicodemirror_template_openclaw_matches_serializer_and_loader_semantics() {
     let mut form = ProviderAddFormState::new(AppType::OpenClaw);
 
@@ -6769,6 +6541,7 @@ fn provider_add_form_openclaw_roundtrip_restores_protocol_and_user_agent_toggle(
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn provider_add_form_openclaw_enabling_user_agent_adds_default_header() {
     let mut form = ProviderAddFormState::new(AppType::OpenClaw);
     form.id.set("oclaw1");
@@ -7830,6 +7603,7 @@ fn provider_add_form_usage_query_table_fields_hide_script_row() {
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn opencode_go_templates_enable_token_plan_usage_query() {
     for app_type in [AppType::Claude, AppType::Codex, AppType::Pi] {
         let mut form = ProviderAddFormState::new(app_type.clone());
@@ -7862,6 +7636,7 @@ fn opencode_go_templates_enable_token_plan_usage_query() {
 }
 
 #[test]
+#[ignore = "sponsor presets removed from personal fork"]
 fn switching_from_opencode_go_template_clears_its_usage_default() {
     for app_type in [AppType::Claude, AppType::Codex, AppType::Pi] {
         let mut form = ProviderAddFormState::new(app_type.clone());

@@ -19,7 +19,7 @@ impl PiProviderPreset {
     }
 }
 
-pub(crate) static PI_BUILTIN_PROVIDER_PRESETS: [PiProviderPreset; 9] = [
+pub(crate) static PI_BUILTIN_PROVIDER_PRESETS: [PiProviderPreset; 5] = [
     PiProviderPreset {
         label: "DeepSeek",
         provider_key: "cc-switch-deep-seek",
@@ -41,28 +41,6 @@ pub(crate) static PI_BUILTIN_PROVIDER_PRESETS: [PiProviderPreset; 9] = [
         partner_promotion_key: None,
         sponsor_id: None,
         settings: zhipu_glm_settings,
-    },
-    PiProviderPreset {
-        label: "Zhipu GLM en",
-        provider_key: "cc-switch-zhipu-glm-en",
-        website_url: "https://z.ai",
-        category: "cn_official",
-        icon: "zhipu",
-        icon_color: Some("#0F62FE"),
-        partner_promotion_key: None,
-        sponsor_id: None,
-        settings: zhipu_glm_en_settings,
-    },
-    PiProviderPreset {
-        label: "ModelScope",
-        provider_key: "cc-switch-model-scope",
-        website_url: "https://modelscope.cn",
-        category: "aggregator",
-        icon: "modelscope",
-        icon_color: Some("#624AFF"),
-        partner_promotion_key: None,
-        sponsor_id: None,
-        settings: modelscope_settings,
     },
     PiProviderPreset {
         label: "MiniMax",
@@ -87,28 +65,6 @@ pub(crate) static PI_BUILTIN_PROVIDER_PRESETS: [PiProviderPreset; 9] = [
         settings: xiaomi_mimo_settings,
     },
     PiProviderPreset {
-        label: "Xiaomi MiMo Token Plan (China)",
-        provider_key: "cc-switch-xiaomi-mi-mo-token-plan-china",
-        website_url: "https://platform.xiaomimimo.com/#/token-plan",
-        category: "cn_official",
-        icon: "xiaomimimo",
-        icon_color: Some("#000000"),
-        partner_promotion_key: None,
-        sponsor_id: None,
-        settings: xiaomi_mimo_token_plan_settings,
-    },
-    PiProviderPreset {
-        label: "OpenCode Go",
-        provider_key: "cc-switch-open-code-go",
-        website_url: "https://opencode.ai/go",
-        category: "third_party",
-        icon: "opencode",
-        icon_color: Some("#211E1E"),
-        partner_promotion_key: Some("opencode_go"),
-        sponsor_id: None,
-        settings: opencode_go_settings,
-    },
-    PiProviderPreset {
         label: "OpenRouter",
         provider_key: "cc-switch-open-router",
         website_url: "https://openrouter.ai",
@@ -121,74 +77,7 @@ pub(crate) static PI_BUILTIN_PROVIDER_PRESETS: [PiProviderPreset; 9] = [
     },
 ];
 
-pub(crate) static PI_SPONSOR_PROVIDER_PRESETS: [PiProviderPreset; 6] = [
-    PiProviderPreset {
-        label: "PackyCode",
-        provider_key: "cc-switch-packy-code",
-        website_url: "https://www.packyapi.ai",
-        category: "third_party",
-        icon: "packycode",
-        icon_color: None,
-        partner_promotion_key: None,
-        sponsor_id: Some("packycode"),
-        settings: packycode_settings,
-    },
-    PiProviderPreset {
-        label: "AICodeMirror",
-        provider_key: "cc-switch-aicode-mirror",
-        website_url: "https://www.aicodemirror.ai",
-        category: "third_party",
-        icon: "aicodemirror",
-        icon_color: Some("#000000"),
-        partner_promotion_key: None,
-        sponsor_id: Some("aicodemirror"),
-        settings: aicodemirror_settings,
-    },
-    PiProviderPreset {
-        label: "FennoAI",
-        provider_key: "cc-switch-fenno-ai",
-        website_url: "https://api.fenno.ai",
-        category: "aggregator",
-        icon: "fenno",
-        icon_color: None,
-        partner_promotion_key: None,
-        sponsor_id: Some("fenno"),
-        settings: fenno_settings,
-    },
-    PiProviderPreset {
-        label: "RunAPI",
-        provider_key: "cc-switch-run-api",
-        website_url: "https://runapi.co",
-        category: "aggregator",
-        icon: "runapi",
-        icon_color: None,
-        partner_promotion_key: None,
-        sponsor_id: Some("runapi"),
-        settings: runapi_settings,
-    },
-    PiProviderPreset {
-        label: "Qiniu",
-        provider_key: "cc-switch-qiniu",
-        website_url: "https://s.qiniu.com/nMvAvy",
-        category: "aggregator",
-        icon: "qiniu",
-        icon_color: None,
-        partner_promotion_key: None,
-        sponsor_id: Some("qiniu"),
-        settings: qiniu_settings,
-    },
-    PiProviderPreset {
-        label: "Cubence",
-        provider_key: "cc-switch-cubence",
-        website_url: "https://cubence.com",
-        category: "third_party",
-        icon: "cubence",
-        icon_color: Some("#000000"),
-        partner_promotion_key: None,
-        sponsor_id: Some("cubence"),
-        settings: cubence_settings,
-    },
-];
+pub(crate) static PI_SPONSOR_PROVIDER_PRESETS: [PiProviderPreset; 0] = [];
 
 fn claude_sonnet(id: &str) -> Value {
     json!({
@@ -554,29 +443,12 @@ mod tests {
             [
                 "DeepSeek",
                 "Zhipu GLM",
-                "Zhipu GLM en",
-                "ModelScope",
                 "MiniMax",
                 "Xiaomi MiMo",
-                "Xiaomi MiMo Token Plan (China)",
-                "OpenCode Go",
                 "OpenRouter",
             ]
         );
-        assert_eq!(
-            PI_SPONSOR_PROVIDER_PRESETS
-                .iter()
-                .map(|preset| preset.sponsor_id.expect("sponsor id"))
-                .collect::<Vec<_>>(),
-            [
-                "packycode",
-                "aicodemirror",
-                "fenno",
-                "runapi",
-                "qiniu",
-                "cubence",
-            ]
-        );
+        assert!(PI_SPONSOR_PROVIDER_PRESETS.is_empty());
     }
 
     #[test]

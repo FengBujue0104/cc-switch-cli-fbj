@@ -55,55 +55,30 @@ pub enum NavItem {
 }
 
 impl NavItem {
-    pub const ALL: [NavItem; 10] = [
+    pub const ALL: [NavItem; 4] = [
         NavItem::Main,
         NavItem::Providers,
-        NavItem::Mcp,
-        NavItem::Skills,
-        NavItem::Sessions,
-        NavItem::Prompts,
-        NavItem::Usage,
-        NavItem::Config,
         NavItem::Settings,
         NavItem::Exit,
     ];
 
-    pub const OPENCLAW_ALL: [NavItem; 11] = [
+    pub const OPENCLAW_ALL: [NavItem; 4] = [
         NavItem::Main,
         NavItem::Providers,
-        NavItem::Sessions,
-        NavItem::OpenClawWorkspace,
-        NavItem::OpenClawEnv,
-        NavItem::OpenClawTools,
-        NavItem::OpenClawAgents,
-        NavItem::Usage,
-        NavItem::Config,
         NavItem::Settings,
         NavItem::Exit,
     ];
 
-    pub const HERMES_ALL: [NavItem; 10] = [
+    pub const HERMES_ALL: [NavItem; 4] = [
         NavItem::Main,
         NavItem::Providers,
-        NavItem::Mcp,
-        NavItem::Skills,
-        NavItem::Sessions,
-        NavItem::HermesMemory,
-        NavItem::Usage,
-        NavItem::Config,
         NavItem::Settings,
         NavItem::Exit,
     ];
 
-    pub const PI_ALL: [NavItem; 10] = [
+    pub const PI_ALL: [NavItem; 4] = [
         NavItem::Main,
         NavItem::Providers,
-        NavItem::Skills,
-        NavItem::Sessions,
-        NavItem::Prompts,
-        NavItem::PiSystemPrompts,
-        NavItem::PiPromptTemplates,
-        NavItem::Usage,
         NavItem::Settings,
         NavItem::Exit,
     ];
@@ -145,60 +120,24 @@ mod tests {
     use super::{NavItem, Route};
 
     #[test]
-    fn skills_appears_before_prompts_in_nav() {
-        let skills = NavItem::ALL
-            .iter()
-            .position(|item| matches!(item, NavItem::Skills))
-            .expect("skills nav item should exist");
-        let prompts = NavItem::ALL
-            .iter()
-            .position(|item| matches!(item, NavItem::Prompts))
-            .expect("prompts nav item should exist");
-
-        assert!(
-            skills < prompts,
-            "skills should appear above prompts in the left nav"
+    fn slim_nav_is_home_providers_settings_exit() {
+        assert_eq!(
+            NavItem::ALL,
+            [
+                NavItem::Main,
+                NavItem::Providers,
+                NavItem::Settings,
+                NavItem::Exit,
+            ]
         );
-    }
-
-    #[test]
-    fn sessions_appears_after_mcp_and_skills_before_prompts_in_nav() {
-        let sessions = NavItem::ALL
-            .iter()
-            .position(|item| matches!(item, NavItem::Sessions))
-            .expect("sessions nav item should exist");
-        let mcp = NavItem::ALL
-            .iter()
-            .position(|item| matches!(item, NavItem::Mcp))
-            .expect("mcp nav item should exist");
-        let skills = NavItem::ALL
-            .iter()
-            .position(|item| matches!(item, NavItem::Skills))
-            .expect("skills nav item should exist");
-        let prompts = NavItem::ALL
-            .iter()
-            .position(|item| matches!(item, NavItem::Prompts))
-            .expect("prompts nav item should exist");
-
-        assert!(mcp < sessions && skills < sessions && sessions < prompts);
-    }
-
-    #[test]
-    fn usage_appears_after_prompts_before_config_in_nav() {
-        let prompts = NavItem::ALL
-            .iter()
-            .position(|item| matches!(item, NavItem::Prompts))
-            .expect("prompts nav item should exist");
-        let usage = NavItem::ALL
-            .iter()
-            .position(|item| matches!(item, NavItem::Usage))
-            .expect("usage nav item should exist");
-        let config = NavItem::ALL
-            .iter()
-            .position(|item| matches!(item, NavItem::Config))
-            .expect("config nav item should exist");
-
-        assert!(prompts < usage && usage < config);
+        for nav_items in [
+            NavItem::ALL.as_slice(),
+            NavItem::OPENCLAW_ALL.as_slice(),
+            NavItem::HERMES_ALL.as_slice(),
+            NavItem::PI_ALL.as_slice(),
+        ] {
+            assert_eq!(nav_items, NavItem::ALL.as_slice());
+        }
     }
 
     #[test]
@@ -213,38 +152,5 @@ mod tests {
                 .iter()
                 .all(|item| item.to_route() != Some(Route::Pricing)));
         }
-    }
-
-    #[test]
-    fn pi_nav_exposes_native_prompt_pages_without_mcp_or_generic_config() {
-        assert!(NavItem::PI_ALL
-            .iter()
-            .any(|item| matches!(item, NavItem::PiSystemPrompts)));
-        assert!(NavItem::PI_ALL
-            .iter()
-            .any(|item| matches!(item, NavItem::PiPromptTemplates)));
-        assert!(!NavItem::PI_ALL
-            .iter()
-            .any(|item| matches!(item, NavItem::Mcp | NavItem::Config)));
-    }
-
-    #[test]
-    fn hermes_nav_uses_memory_instead_of_prompts() {
-        assert!(NavItem::HERMES_ALL
-            .iter()
-            .any(|item| matches!(item, NavItem::HermesMemory)));
-        assert!(NavItem::HERMES_ALL
-            .iter()
-            .any(|item| matches!(item, NavItem::Config)));
-        assert!(!NavItem::HERMES_ALL
-            .iter()
-            .any(|item| matches!(item, NavItem::Prompts)));
-    }
-
-    #[test]
-    fn openclaw_nav_keeps_generic_config_entry() {
-        assert!(NavItem::OPENCLAW_ALL
-            .iter()
-            .any(|item| matches!(item, NavItem::Config)));
     }
 }

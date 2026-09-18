@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-REPO="SaladDay/cc-switch-cli"
+REPO="FengBujue0104/cc-switch-cli-fbj"
 BIN_NAME="cc-switch"
 INSTALL_DIR="${CC_SWITCH_INSTALL_DIR:-$HOME/.local/bin}"
 TARGET="${INSTALL_DIR}/${BIN_NAME}"

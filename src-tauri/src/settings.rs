@@ -26,6 +26,10 @@ pub struct VisibleApps {
     pub pi: bool,
 }
 
+fn default_unify_codex_session_history() -> bool {
+    true
+}
+
 fn default_visible_app_claude() -> bool {
     true
 }
@@ -39,7 +43,7 @@ fn default_visible_app_gemini() -> bool {
 }
 
 fn default_visible_app_opencode() -> bool {
-    true
+    false
 }
 
 fn default_visible_app_hermes() -> bool {
@@ -47,7 +51,7 @@ fn default_visible_app_hermes() -> bool {
 }
 
 fn default_visible_app_openclaw() -> bool {
-    true
+    false
 }
 
 fn default_visible_app_pi() -> bool {
@@ -59,9 +63,9 @@ pub fn default_visible_apps() -> VisibleApps {
         claude: true,
         codex: true,
         gemini: false,
-        opencode: true,
+        opencode: false,
         hermes: true,
-        openclaw: true,
+        openclaw: false,
         pi: true,
     }
 }
@@ -575,7 +579,7 @@ pub struct AppSettings {
     pub preserve_codex_official_auth_on_switch: bool,
     /// Run official Codex providers under the shared "custom" model_provider id
     /// so official sessions share one resume-history bucket with third-party providers.
-    #[serde(default)]
+    #[serde(default = "default_unify_codex_session_history")]
     pub unify_codex_session_history: bool,
     /// User opted in to migrate existing official sessions ("openai" bucket)
     /// into the shared bucket. Persisted so a failed migration retries at startup;
@@ -658,7 +662,7 @@ impl Default for AppSettings {
             icons: None,
             launch_on_startup: false,
             preserve_codex_official_auth_on_switch: false,
-            unify_codex_session_history: false,
+            unify_codex_session_history: true,
             unify_codex_migrate_existing: None,
             usage_auto_sync: default_usage_auto_sync(),
             skill_sync_method: crate::services::skill::SyncMethod::default(),
@@ -1498,7 +1502,7 @@ mod tests {
     #[test]
     fn codex_unified_session_history_defaults_off() {
         let settings = AppSettings::default();
-        assert!(!settings.unify_codex_session_history);
+        assert!(settings.unify_codex_session_history);
         assert_eq!(settings.unify_codex_migrate_existing, None);
     }
 

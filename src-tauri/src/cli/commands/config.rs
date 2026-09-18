@@ -55,15 +55,15 @@ pub enum ConfigCommand {
     Common(config_common::CommonConfigCommand),
 
     /// Manage OpenClaw config, workspace, and daily memory
-    #[command(name = "openclaw", subcommand)]
+    #[command(name = "openclaw", subcommand, hide = true)]
     OpenClaw(config_openclaw::OpenClawCommand),
 
     /// Manage WebDAV sync settings and operations
-    #[command(name = "webdav", subcommand)]
+    #[command(name = "webdav", subcommand, hide = true)]
     WebDav(config_webdav::WebDavCommand),
 
     /// Manage S3-compatible sync settings and operations
-    #[command(name = "s3", subcommand)]
+    #[command(name = "s3", subcommand, hide = true)]
     S3(config_s3::S3Command),
 }
 

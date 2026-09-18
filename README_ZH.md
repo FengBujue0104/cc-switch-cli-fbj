@@ -4,7 +4,7 @@
 
 ## CC-Switch CLI
 
-**通过交互式 TUI 或脚本化 CLI，统一管理 Claude Code、Codex、Gemini、OpenCode、Hermes、OpenClaw 和 Pi。**
+**通过交互式 TUI 或脚本化 CLI，管理 Claude Code、Codex、Hermes 和 Pi 的供应商配置。**
 
 [![Version](https://img.shields.io/badge/version-5.10.5-blue.svg)](https://github.com/saladday/cc-switch-cli/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](https://github.com/saladday/cc-switch-cli/releases)
@@ -19,114 +19,9 @@
 
 ## 📖 关于本项目
 
-本项目是原版 [CC-Switch](https://github.com/farion1231/cc-switch) 的 **CLI 分支**。🔄 WebDAV 同步功能与上游项目完全兼容。
-
+本项目是 [CC-Switch CLI](https://github.com/saladday/cc-switch-cli) 的个人轻量化分支（上游为 [CC-Switch](https://github.com/farion1231/cc-switch)）。保留 Claude、Codex、Hermes、Pi 的供应商切换，已去掉赞助商推广。
 
 **更新日志：** [CHANGELOG.md](CHANGELOG.md)
-
----
-
-## ❤️赞助商
-
-[![AICodeMirror](assets/partners/banners/aicodemirror.png)](https://www.aicodemirror.ai/register?invitecode=77V9EA)
-
-感谢 **AICodeMirror** 赞助了本项目！AICodeMirror 提供 Claude / Codex / Gemini 官方高稳定中转服务，支持企业级高并发、极速开票、7×24 专属技术支持。Codex 官方渠道低至 **0.7 折**，充值更有折上折！
-
-AICodeMirror 为 CC-Switch CLI 项目的用户提供了特别福利，通过[此链接](https://www.aicodemirror.ai/register?invitecode=77V9EA)注册的用户，可享受首充 **8 折**。
-
----
-
-<table>
-  <tr>
-    <td width="180">
-      <a href="https://console.apito.ai/agent/register/Bsi9NDlWGpkPoAii">
-        <img src="assets/partners/logos/claudeapi.png" alt="ClaudeAPI" width="150">
-      </a>
-    </td>
-    <td>
-      感谢 <b>ClaudeAPI</b> 赞助本项目！<b>ClaudeAPI</b> 是一家专注 Claude 的 API 接入服务商，走官方与 AWS 渠道，主打高稳定、低延迟，完整支持 Claude Code、Codex 与 Agent 工作流。支持企业对接、发票服务，并可在 <b>CC-Switch CLI</b> 中一键配置调用。CC-Switch CLI 用户专属福利：通过<a href="https://console.apito.ai/agent/register/Bsi9NDlWGpkPoAii">此链接</a>注册，即可领取免费测试额度。
-    </td>
-  </tr>
-  <tr>
-    <td width="180">
-      <a href="https://pateway.ai/?ch=18fxbjo">
-        <img src="assets/partners/logos/pateway.png" alt="PatewayAI" width="150">
-      </a>
-    </td>
-    <td>
-      PatewayAI 是一家面向资深 AI 开发者的 API 中继服务商，完整支持 Claude 与 Codex 系列模型。所有模型均来自官方高质量渠道，绝无稀释、绝无伪造，计费明细透明可查。<br/>
-      经济模式低至 0.5 折，通过<a href="https://pateway.ai/?ch=18fxbjo">此链接</a>注册即可获得试用额度，还可参与不定时营销活动领取免费额度。<br/>
-      平台同时支持企业级并发、专属管理后台、正式合同与发票，并提供最高 150 美元的双向推荐奖励。
-    </td>
-  </tr>
-  <tr>
-    <td width="180">
-      <a href="https://cubence.com/signup?code=SC3M1CAH&source=ccscli">
-        <img src="assets/partners/logos/cubence.png" alt="Cubence" width="150">
-      </a>
-    </td>
-    <td>
-      感谢 <b>Cubence</b> 赞助本项目！Cubence 是一家致力为客户提供稳定、高效的API中转服务商。从25年9月运营至今，提供了Claude code、Codex、Gemini等多种模型支持。通过<a href="https://cubence.com/signup?code=SC3M1CAH&source=ccscli">此链接</a>注册，并在充值时使用 <code>CCSCLI</code> 优惠码享受9折优惠。
-    </td>
-  </tr>
-  <tr>
-    <td width="180">
-      <a href="https://www.openmodel.ai/?ref=JGDNqZl8">
-        <img src="assets/partners/logos/openmodel.jpg" alt="OpenModel" width="150">
-      </a>
-    </td>
-    <td>
-      一个API，顶级模型随便用！<a href="https://www.openmodel.ai/?ref=JGDNqZl8"><b>OpenModel</b></a> 专注于生产级、高可用的 AI API 网关，让你的应用真正做到高速稳定：自动故障转移、智能选最优渠道、生产级 SLA 保障。远超单一供应商的 SLA，让稳定性成为您的核心竞争力。
-    </td>
-  </tr>
-  <tr>
-    <td width="180">
-      <a href="https://s.qiniu.com/FVfiEb">
-        <img src="assets/partners/logos/qiniuyun.png" alt="七牛云AI" width="150">
-      </a>
-    </td>
-    <td>
-      感谢 <b>七牛云AI</b> 赞助本项目！<b>七牛云（02567.HK）</b>旗下企业级大模型 MaaS 平台，一站式调用全球 150+ 主流模型，兼容全球主流模型厂商协议，覆盖文本、图像、音频、视频、文件处理等全模态处理能力，服务超过 <b>169 万</b>企业及开发者用户。<br/>
-      专属福利：企业用户免费领 <b>1200 万 Token</b>，邀请好友最高得<b>百亿 Token</b>。通过<a href="https://s.qiniu.com/FVfiEb">此链接</a>注册领取。
-    </td>
-  </tr>
-  <tr>
-    <td width="180">
-      <a href="https://api.fenno.ai/register?redirect=/purchase?tab=subscription%26group=16&aff=Z6XB52KCVP6Y">
-        <img src="assets/partners/logos/fennoai.png" alt="Fenno.ai" width="150">
-      </a>
-    </td>
-    <td>
-      感谢 <b>Fenno.ai</b> 赞助本项目！Fenno.ai 是一家稳定、高效的 API 中转服务商，目前主要提供 Codex 中转服务，兼容 OpenAI 及 Anthropic 协议，可灵活接入 Codex、Claude Code、OpenCode 等主流编程工具，可稳定支撑千亿 Token/日的企业级调用需求，支持国内及海外主体公对公结算、开票。<br/>
-      Fenno.ai 为 CC-Switch CLI 用户提供了专属福利：通过<a href="https://api.fenno.ai/register?redirect=/purchase?tab=subscription%26group=16&aff=Z6XB52KCVP6Y">此链接</a>即可订阅 <b>9.9 元/150 刀额度</b>的超值 Coding Plan，邀请好友最高可享 <b>20% 奖励</b>，多邀多得！
-    </td>
-  </tr>
-  <tr>
-    <td width="180">
-      <a href="https://www.packyapi.com/register?aff=cc-switch-cli">
-        <img src="assets/partners/logos/packycode.png" alt="PackyCode" width="150">
-      </a>
-    </td>
-    <td>
-      感谢 <b>PackyCode</b> 赞助本项目！<br/>
-      官网：<a href="https://www.packyapi.com">https://www.packyapi.com</a><br/>
-      CC-Switch CLI 专属优惠：通过
-      <a href="https://www.packyapi.com/register?aff=cc-switch-cli">此链接</a>
-      注册，并在充值时填写优惠码 <code>cc-switch-cli</code>，即可享受 <b>9 折优惠</b>。
-    </td>
-  </tr>
-  <tr>
-    <td width="180">
-      <a href="https://ddshub.short.gy/ccscli">
-        <img src="assets/partners/logos/DDSHub.png" alt="DDS" width="150">
-      </a>
-    </td>
-    <td>
-      感谢 <b>DDS</b> 赞助本项目！呆呆兽是一家专注 Claude 的可靠高效 API 中转站，为个人和企业用户提供极具性价比的国内 Claude 直连加速服务。支持 <b>Claude Haiku / Opus / Sonnet 等满血模型</b>。充值满 1000 元即可开具发票，企业客户更可享受定制化分组和技术支持服务。<br/>
-      CC-Switch CLI 用户专属福利：通过<a href="https://ddshub.short.gy/ccscli">此链接</a>注册后，首单充值可<b>额外赠送 10% 额度</b>（充值后请联系群主领取）！
-    </td>
-  </tr>
-</table>
 
 ---
 
