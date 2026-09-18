@@ -34,13 +34,7 @@ pub struct VisibleAppsStartupOutcome {
     pub should_prompt: bool,
 }
 
-const CONTROLLED_APPS: [AppType; 5] = [
-    AppType::Gemini,
-    AppType::OpenCode,
-    AppType::Hermes,
-    AppType::OpenClaw,
-    AppType::Pi,
-];
+const CONTROLLED_APPS: [AppType; 2] = [AppType::Hermes, AppType::Pi];
 
 pub fn detect_visible_app_installation() -> VisibleAppsDetection {
     let installed = CONTROLLED_APPS
@@ -333,21 +327,32 @@ mod tests {
         let outcome = apply_startup_policy(&detection(&[
             (AppType::Gemini, true),
             (AppType::OpenCode, false),
-            (AppType::Hermes, true),
+            (AppType::Hermes, false),
             (AppType::OpenClaw, true),
+            (AppType::Pi, true),
         ]))
         .expect("apply policy");
 
         assert!(!outcome.visible_apps.claude);
         assert!(outcome.visible_apps.codex);
-        assert!(outcome.visible_apps.gemini);
-        assert!(!outcome.visible_apps.opencode);
-        assert!(outcome.visible_apps.hermes);
-        assert!(outcome.visible_apps.openclaw);
+        assert!(
+            !outcome.visible_apps.gemini,
+            "Auto must not surface Gemini even when it is installed"
+        );
+        assert!(
+            outcome.visible_apps.opencode,
+            "Auto must not hide a previously enabled OpenCode flag"
+        );
+        assert!(!outcome.visible_apps.hermes);
+        assert!(
+            !outcome.visible_apps.openclaw,
+            "Auto must not surface OpenClaw even when it is installed"
+        );
+        assert!(outcome.visible_apps.pi);
         assert!(matches!(
             outcome.notices.as_slice(),
             [VisibleAppsNotice::AutoUpdated { apps }]
-                if apps == &vec![AppType::Gemini, AppType::OpenCode, AppType::OpenClaw]
+                if apps == &vec![AppType::Hermes, AppType::Pi]
         ));
     }
 
@@ -373,24 +378,24 @@ mod tests {
         };
         crate::settings::update_settings(settings).expect("save settings");
 
-        let installed = detection(&[(AppType::Gemini, true)]);
+        let installed = detection(&[(AppType::Pi, true)]);
         let first = apply_startup_policy(&installed).expect("first policy");
         assert!(matches!(
             first.notices.as_slice(),
             [VisibleAppsNotice::ManualHiddenInstalled { apps }]
-                if apps == &vec![AppType::Gemini]
+                if apps == &vec![AppType::Pi]
         ));
 
         let second = apply_startup_policy(&installed).expect("second policy");
         assert!(second.notices.is_empty());
 
-        let missing = detection(&[(AppType::Gemini, false)]);
+        let missing = detection(&[(AppType::Pi, false)]);
         apply_startup_policy(&missing).expect("missing policy");
         let third = apply_startup_policy(&installed).expect("third policy");
         assert!(matches!(
             third.notices.as_slice(),
             [VisibleAppsNotice::ManualHiddenInstalled { apps }]
-                if apps == &vec![AppType::Gemini]
+                if apps == &vec![AppType::Pi]
         ));
     }
 
@@ -401,10 +406,8 @@ mod tests {
         let _env = EnvGuard::set_home(temp_home.path());
 
         let outcome = apply_startup_policy(&detection(&[
-            (AppType::Gemini, true),
-            (AppType::OpenCode, true),
-            (AppType::Hermes, true),
-            (AppType::OpenClaw, true),
+            (AppType::Hermes, false),
+            (AppType::Pi, true),
         ]))
         .expect("apply policy");
 
@@ -421,6 +424,31 @@ mod tests {
 
     #[test]
     #[serial(home_settings)]
+    fn first_run_does_not_prompt_when_only_hidden_apps_are_installed() {
+        let temp_home = TempDir::new().expect("create temp home");
+        let _env = EnvGuard::set_home(temp_home.path());
+
+        let outcome = apply_startup_policy(&detection(&[
+            (AppType::Gemini, true),
+            (AppType::OpenCode, true),
+            (AppType::Hermes, true),
+            (AppType::OpenClaw, true),
+            (AppType::Pi, true),
+        ]))
+        .expect("apply policy");
+
+        assert!(
+            !outcome.should_prompt,
+            "installed Gemini/OpenCode/OpenClaw must not trigger the first-run visibility prompt"
+        );
+        assert_eq!(
+            crate::settings::get_visible_apps(),
+            crate::settings::default_visible_apps()
+        );
+    }
+
+    #[test]
+    #[serial(home_settings)]
     fn auto_mode_falls_back_to_claude_when_detection_hides_every_controlled_app() {
         let temp_home = TempDir::new().expect("create temp home");
         let _env = EnvGuard::set_home(temp_home.path());
@@ -428,11 +456,11 @@ mod tests {
         settings.visible_apps = VisibleApps {
             claude: false,
             codex: false,
-            gemini: true,
-            opencode: true,
+            gemini: false,
+            opencode: false,
             hermes: true,
-            openclaw: true,
-            pi: false,
+            openclaw: false,
+            pi: true,
         };
         settings.visible_apps_settings = VisibleAppsSettings {
             mode: VisibleAppsMode::Auto,
