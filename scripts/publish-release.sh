@@ -100,11 +100,26 @@ if [[ -f "${OUT}/cc-switch-cli-${TAG}-windows-x64.zip" ]]; then
   assets+=("${OUT}/cc-switch-cli-${TAG}-windows-x64.zip")
 fi
 
+# Windows gh.exe cannot read WSL /mnt paths; convert when needed.
+gh_path() {
+  local p="$1"
+  if [[ "${GH}" == *.exe || "${GH}" == *.EXE ]] && command -v wslpath >/dev/null 2>&1; then
+    wslpath -w "$p"
+  else
+    printf '%s' "$p"
+  fi
+}
+
+gh_assets=()
+for asset in "${assets[@]}"; do
+  gh_assets+=("$(gh_path "${asset}")")
+done
+
 echo "==> GitHub release ${TAG}"
 if "${GH}" release view "${TAG}" --repo "${REPO}" >/dev/null 2>&1; then
-  "${GH}" release upload "${TAG}" --repo "${REPO}" --clobber "${assets[@]}"
+  "${GH}" release upload "${TAG}" --repo "${REPO}" --clobber "${gh_assets[@]}"
 else
-  "${GH}" release create "${TAG}" --repo "${REPO}" --title "CC Switch CLI ${TAG}" --notes-file "${NOTES}" "${assets[@]}"
+  "${GH}" release create "${TAG}" --repo "${REPO}" --title "CC Switch CLI ${TAG}" --notes-file "$(gh_path "${NOTES}")" "${gh_assets[@]}"
 fi
 
 echo "Published ${TAG}"
