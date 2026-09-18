@@ -1500,7 +1500,7 @@ mod tests {
     }
 
     #[test]
-    fn codex_unified_session_history_defaults_off() {
+    fn codex_unified_session_history_defaults_on() {
         let settings = AppSettings::default();
         assert!(settings.unify_codex_session_history);
         assert_eq!(settings.unify_codex_migrate_existing, None);

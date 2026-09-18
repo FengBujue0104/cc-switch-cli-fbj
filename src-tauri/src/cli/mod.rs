@@ -129,13 +129,20 @@ mod tests {
         assert!(help.contains("Claude Code, Codex, Hermes, and Pi"));
     }
 
-    #[cfg(feature = "legacy-commands")]
     #[test]
     fn skills_command_is_removed() {
         let mut cmd = Cli::command();
         assert!(
             cmd.find_subcommand_mut("skills").is_none(),
             "skills management is out of scope for this fork"
+        );
+        assert!(
+            cmd.find_subcommand_mut("sessions").is_none(),
+            "sessions management is out of scope for this fork"
+        );
+        assert!(
+            cmd.find_subcommand_mut("mcp").is_none(),
+            "mcp management is out of scope for this fork"
         );
     }
 
