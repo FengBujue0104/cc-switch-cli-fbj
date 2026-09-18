@@ -527,7 +527,16 @@ fn release_asset_candidates_for_platform(
             "cc-switch-cli-darwin-universal.tar.gz".to_string(),
             "cc-switch-cli-darwin-arm64.tar.gz".to_string(),
         ],
-        ("linux", "x86_64" | "aarch64") => {
+        ("linux", "x86_64") => {
+            let mut names = vec![linux_release_asset_name(arch, preference)?.to_string()];
+            // This fork ships one static musl binary named linux-x64.tar.gz.
+            let portable = "cc-switch-cli-linux-x64.tar.gz".to_string();
+            if !names.contains(&portable) {
+                names.push(portable);
+            }
+            names
+        }
+        ("linux", "aarch64") => {
             vec![linux_release_asset_name(arch, preference)?.to_string()]
         }
         ("windows", "x86_64") => vec!["cc-switch-cli-windows-x64.zip".to_string()],

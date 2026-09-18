@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Install cc-switch from GitHub Releases.
-# Does not use GitHub Actions. Assets are published with scripts/publish-release.sh.
+# Install cc-switch from GitHub Releases. Verifies SHA-256 from checksums.txt.
 set -Eeuo pipefail
 
 REPO="${CC_SWITCH_REPO:-FengBujue0104/cc-switch-cli-fbj}"
@@ -25,23 +24,14 @@ cleanup() {
   fi
 }
 
-need_cmd() {
-  if ! command -v "$1" >/dev/null 2>&1; then
-    err "Required command not found: $1"
-    exit 1
-  fi
-}
-
 http_get() {
   local url="$1"
   local dest="${2:-}"
   if command -v curl >/dev/null 2>&1; then
     if [[ -n "${dest}" ]]; then
-      curl --fail --location --silent --show-error \
-        -A "cc-switch-install" -o "${dest}" "${url}"
+      curl --fail --location --silent --show-error -A "cc-switch-install" -o "${dest}" "${url}"
     else
-      curl --fail --location --silent --show-error \
-        -A "cc-switch-install" "${url}"
+      curl --fail --location --silent --show-error -A "cc-switch-install" "${url}"
     fi
   elif command -v wget >/dev/null 2>&1; then
     if [[ -n "${dest}" ]]; then
@@ -51,6 +41,17 @@ http_get() {
     fi
   else
     err "Neither curl nor wget found."
+    exit 1
+  fi
+}
+
+file_sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    err "Need sha256sum or shasum to verify the download."
     exit 1
   fi
 }
@@ -95,29 +96,46 @@ else
   release_json="$(http_get "${API}/tags/${VERSION}")"
 fi
 
-asset_url="$(printf '%s' "${release_json}" | grep -oE 'https://[^"]+linux-x64\.tar\.gz' | head -n 1 || true)"
-if [[ -z "${asset_url}" ]]; then
-  err "No linux-x64.tar.gz asset on ${REPO} ${VERSION}."
-  err "See ${RELEASES_URL}"
+tag_name="$(printf '%s' "${release_json}" | grep -oE '"tag_name":[[:space:]]*"[^"]+"' | head -n 1 | sed -E 's/.*"tag_name":[[:space:]]*"([^"]+)".*/\1/')"
+if [[ -z "${tag_name}" || "${tag_name}" == *'/'* || "${tag_name}" == *'..'* ]]; then
+  err "Could not read a safe tag_name from ${REPO} ${VERSION}."
   exit 1
 fi
 
+asset_name="cc-switch-cli-${tag_name}-linux-x64.tar.gz"
+asset_url="https://github.com/${REPO}/releases/download/${tag_name}/${asset_name}"
+checksum_url="https://github.com/${REPO}/releases/download/${tag_name}/checksums.txt"
+
 trap cleanup EXIT
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/cc-switch-install.XXXXXX")"
-archive="${TMP_DIR}/cc-switch.tar.gz"
+archive="${TMP_DIR}/${asset_name}"
+checksums="${TMP_DIR}/checksums.txt"
 
 info "Downloading ${asset_url}"
 http_get "${asset_url}" "${archive}"
-tar -xzf "${archive}" -C "${TMP_DIR}"
+info "Downloading ${checksum_url}"
+http_get "${checksum_url}" "${checksums}"
 
-bin=""
-if [[ -f "${TMP_DIR}/${BIN_NAME}" ]]; then
-  bin="${TMP_DIR}/${BIN_NAME}"
-else
-  bin="$(find "${TMP_DIR}" -type f -name "${BIN_NAME}" | head -n 1 || true)"
+expected="$(awk -v name="${asset_name}" '
+  $2 == name || $2 == ("*" name) { print $1; found=1 }
+  END { if (!found) exit 1 }
+' "${checksums}")" || {
+  err "checksums.txt does not list ${asset_name}."
+  exit 1
+}
+actual="$(file_sha256 "${archive}")"
+if [[ "${actual}" != "${expected}" ]]; then
+  err "Checksum mismatch for ${asset_name}."
+  err "expected ${expected}"
+  err "got      ${actual}"
+  exit 1
 fi
-if [[ -z "${bin}" || ! -f "${bin}" ]]; then
-  err "Archive did not contain ${BIN_NAME}."
+info "Checksum OK"
+
+tar -xzf "${archive}" -C "${TMP_DIR}"
+bin="${TMP_DIR}/${BIN_NAME}"
+if [[ ! -f "${bin}" ]]; then
+  err "Archive did not contain ${BIN_NAME} at the top level."
   exit 1
 fi
 
@@ -127,7 +145,7 @@ chmod 755 "${TARGET}.new"
 mv -f "${TARGET}.new" "${TARGET}"
 chmod 755 "${TARGET}"
 
-info "Installed ${TARGET}"
+info "Installed ${TARGET} (${tag_name})"
 if ! command -v "${BIN_NAME}" >/dev/null 2>&1 || [[ "$(command -v "${BIN_NAME}")" != "${TARGET}" ]]; then
   case ":${PATH}:" in
     *":${INSTALL_DIR}:"*) ;;

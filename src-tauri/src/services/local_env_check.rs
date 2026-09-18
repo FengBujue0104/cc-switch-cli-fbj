@@ -1016,9 +1016,9 @@ mod tests {
         let (temp_dir, tool_path) = fake_tool("#!/bin/sh\nprintf ran > \"$0.executed\"\n");
         let marker_path = temp_dir.path().join("fake-tool.executed");
 
-        assert!(is_tool_installed(
-            tool_path.to_str().expect("fake tool path should be utf-8")
-        ));
+        assert!(
+            resolve_tool_path(tool_path.to_str().expect("fake tool path should be utf-8")).is_some()
+        );
         assert!(
             !marker_path.exists(),
             "visibility detection must not execute version commands"

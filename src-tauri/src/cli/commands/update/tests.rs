@@ -288,6 +288,71 @@ fn release_asset_names_prefer_plain_then_tagged_variant() {
 }
 
 #[test]
+fn linux_x86_64_candidates_include_portable_linux_x64_tarball() {
+    let names = release_asset_candidates_for_platform("linux", "x86_64", LinuxLibcPreference::Auto)
+        .expect("linux x86_64 candidates");
+    assert!(names.contains(&"cc-switch-cli-linux-x64-musl.tar.gz".to_string()));
+    assert!(names.contains(&"cc-switch-cli-linux-x64.tar.gz".to_string()));
+    let tagged = release_asset_names("v5.10.5-fbj.1", "cc-switch-cli-linux-x64.tar.gz");
+    assert!(tagged.contains(&"cc-switch-cli-v5.10.5-fbj.1-linux-x64.tar.gz".to_string()));
+}
+
+#[test]
+fn updater_repository_is_this_fork() {
+    assert_eq!(
+        REPO_URL,
+        "https://github.com/FengBujue0104/cc-switch-cli-fbj"
+    );
+}
+
+#[test]
+fn release_checksums_url_for_this_fork() {
+    let url = release_checksums_url(
+        "https://github.com/FengBujue0104/cc-switch-cli-fbj",
+        "v5.10.5-fbj.1",
+    )
+    .expect("checksums url should be built");
+    assert_eq!(
+        url.as_str(),
+        "https://github.com/FengBujue0104/cc-switch-cli-fbj/releases/download/v5.10.5-fbj.1/checksums.txt"
+    );
+}
+
+#[test]
+fn parse_checksum_for_tagged_portable_linux_asset() {
+    let checksums = concat!(
+        "380faf9139d3c4a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef012  ",
+        "cc-switch-cli-v5.10.5-fbj.1-linux-x64.tar.gz\n",
+        "e6ee8c9d0123456789abcdef0123456789abcdef0123456789abcdef01234567  ",
+        "cc-switch-cli-v5.10.5-fbj.1-windows-x64.zip\n",
+    );
+    let got = parse_checksum_for_asset(checksums, "cc-switch-cli-v5.10.5-fbj.1-linux-x64.tar.gz")
+        .expect("checksum should exist");
+    assert_eq!(
+        got,
+        "380faf9139d3c4a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef012"
+    );
+}
+
+#[test]
+fn select_release_asset_finds_tagged_linux_x64_when_musl_name_missing() {
+    let assets = vec![ReleaseAsset {
+        name: "cc-switch-cli-v5.10.5-fbj.1-linux-x64.tar.gz".to_string(),
+        browser_download_url: "https://example.invalid/a.tar.gz".to_string(),
+        digest: None,
+    }];
+    let candidates =
+        release_asset_candidates_for_platform("linux", "x86_64", LinuxLibcPreference::Auto)
+            .expect("linux x86_64 candidates");
+    let selected = select_release_asset_from_candidates(&assets, "v5.10.5-fbj.1", &candidates)
+        .expect("should find tagged linux-x64 tarball");
+    assert_eq!(
+        selected.name,
+        "cc-switch-cli-v5.10.5-fbj.1-linux-x64.tar.gz"
+    );
+}
+
+#[test]
 fn release_api_url_for_github_com() {
     let url = release_api_url("https://github.com/saladday/cc-switch-cli", "latest")
         .expect("api url should be built");
@@ -432,6 +497,21 @@ fn should_not_skip_when_version_explicitly_requested() {
         "4.6.2",
         true
     ));
+}
+
+#[test]
+fn implicit_update_skips_fbj_prerelease_against_crate_version() {
+    assert!(should_skip_implicit_downgrade(
+        "5.10.5",
+        "5.10.5-fbj.1",
+        false
+    ));
+    assert!(!should_skip_implicit_downgrade(
+        "5.10.5",
+        "5.10.5-fbj.1",
+        true
+    ));
+    assert!(!should_skip_implicit_downgrade("5.10.5", "5.10.6", false));
 }
 
 #[test]
