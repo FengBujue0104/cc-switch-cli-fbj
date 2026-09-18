@@ -34,6 +34,8 @@ Official Codex OAuth is kept. Unified Codex session history (`model_provider = c
 
 ## Install
 
+Release packages are **Windows x86_64** and **Linux x86_64** (static musl) only. This fork does not ship macOS binaries.
+
 **Linux x86_64** (static musl, Debian 12+):
 
 ```bash

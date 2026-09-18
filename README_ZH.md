@@ -34,6 +34,8 @@
 
 ## 安装
 
+发版包只有 **Windows x86_64** 和 **Linux x86_64**（静态 musl）。本 fork 不提供 macOS 二进制。
+
 **Linux x86_64**（静态 musl，Debian 12 可用）：
 
 ```bash
