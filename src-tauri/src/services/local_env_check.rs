@@ -221,11 +221,64 @@ async fn check_local_environment_progressive_with<F, P, ProbeFuture>(
 
 pub fn check_tool_installed(app_type: &AppType) -> bool {
     let tool = LocalTool::from_app_type(app_type);
-    is_tool_installed(tool.binary_name())
+    resolve_tool_path(tool.binary_name()).is_some() || live_config_present(tool)
 }
 
-fn is_tool_installed(bin: &str) -> bool {
-    which::which(bin).is_ok()
+fn live_config_present(tool: LocalTool) -> bool {
+    match tool {
+        LocalTool::Codex => crate::codex_config::get_codex_config_path()
+            .parent()
+            .is_some_and(|dir| dir.join("auth.json").exists() || dir.join("config.toml").exists()),
+        LocalTool::Claude => crate::config::get_claude_settings_path().exists(),
+        LocalTool::Hermes => crate::hermes_config::get_hermes_config_path().exists(),
+        _ => false,
+    }
+}
+
+#[cfg(windows)]
+fn extra_tool_search_dirs() -> Vec<std::path::PathBuf> {
+    let mut dirs = Vec::new();
+    #[cfg(windows)]
+    {
+        use std::path::PathBuf;
+        if let Some(appdata) = std::env::var_os("APPDATA") {
+            dirs.push(PathBuf::from(appdata).join("npm"));
+        }
+        if let Some(local) = std::env::var_os("LOCALAPPDATA") {
+            dirs.push(PathBuf::from(&local).join("npm"));
+            dirs.push(PathBuf::from(&local).join("Programs"));
+        }
+        if let Some(profile) = std::env::var_os("USERPROFILE") {
+            let profile = PathBuf::from(profile);
+            dirs.push(profile.join(r"AppData\Roaming\npm"));
+            dirs.push(profile.join(".local").join("bin"));
+            dirs.push(profile.join(".cargo").join("bin"));
+        }
+    }
+    dirs
+}
+
+fn resolve_tool_path(bin: &str) -> Option<std::path::PathBuf> {
+    #[cfg(windows)]
+    {
+        // npm's global Windows layout is `codex`, `codex.cmd`, `codex.ps1`.
+        // `which("codex")` often returns the extensionless Unix shim, which
+        // CreateProcess cannot run. Prefer real Windows launchers.
+        for ext in [".cmd", ".exe", ".bat"] {
+            if let Ok(path) = which::which(format!("{bin}{ext}")) {
+                return Some(path);
+            }
+        }
+        for dir in extra_tool_search_dirs() {
+            for ext in [".cmd", ".exe", ".bat"] {
+                let candidate = dir.join(format!("{bin}{ext}"));
+                if candidate.is_file() {
+                    return Some(candidate);
+                }
+            }
+        }
+    }
+    which::which(bin).ok()
 }
 
 async fn check_tool(
@@ -236,9 +289,18 @@ async fn check_tool(
         return None;
     }
 
-    let executable = match which::which(tool.binary_name()) {
-        Ok(path) => path,
-        Err(_) => {
+    let executable = match resolve_tool_path(tool.binary_name()) {
+        Some(path) => path,
+        None if live_config_present(tool) => {
+            return Some(ToolCheckResult {
+                tool,
+                display_name: tool.display_name(),
+                status: ToolCheckStatus::Ok {
+                    version: "configured".to_string(),
+                },
+            });
+        }
+        None => {
             return Some(ToolCheckResult {
                 tool,
                 display_name: tool.display_name(),
