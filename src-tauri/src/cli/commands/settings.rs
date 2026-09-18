@@ -655,6 +655,16 @@ fn codex_history_cmd(cmd: CodexHistoryCommand) -> Result<(), AppError> {
     }
 }
 
+fn official_codex_sessions_need_migrate(settings: &crate::settings::AppSettings) -> bool {
+    settings.unify_codex_session_history
+        && !settings.unify_codex_migrate_existing.unwrap_or(false)
+        && settings
+            .local_migrations
+            .as_ref()
+            .and_then(|migrations| migrations.codex_official_history_unify_v1.as_ref())
+            .is_none()
+}
+
 fn show_codex_history(json_output: bool) -> Result<(), AppError> {
     let settings = crate::settings::get_settings();
     let has_backup = crate::codex_history_migration::has_codex_official_history_unify_backup();
@@ -662,6 +672,7 @@ fn show_codex_history(json_output: bool) -> Result<(), AppError> {
         .local_migrations
         .as_ref()
         .and_then(|migrations| migrations.codex_official_history_unify_v1.as_ref());
+    let needs_migrate = official_codex_sessions_need_migrate(&settings);
 
     if json_output {
         let payload = json!({
@@ -669,6 +680,7 @@ fn show_codex_history(json_output: bool) -> Result<(), AppError> {
             "migrateExistingRequested": settings.unify_codex_migrate_existing.unwrap_or(false),
             "hasBackup": has_backup,
             "migration": migration,
+            "officialSessionsNeedMigrate": needs_migrate,
         });
         println!(
             "{}",
@@ -691,6 +703,14 @@ fn show_codex_history(json_output: bool) -> Result<(), AppError> {
         println!(
             "Last migration: jsonl_files={}, state_rows={}",
             migration.migrated_jsonl_files, migration.migrated_state_rows
+        );
+    }
+    if needs_migrate {
+        println!(
+            "{}",
+            warning(
+                "Official Codex sessions stay in the openai history bucket. Migrate them with: cc-switch settings codex-history migrate-existing"
+            )
         );
     }
     Ok(())
@@ -838,8 +858,11 @@ fn yes_no(value: bool) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{save_manual_visible_apps, set_codex_auth_preservation, OutboundProxyCommand};
-    use crate::settings::{VisibleApps, VisibleAppsMode};
+    use super::{
+        official_codex_sessions_need_migrate, save_manual_visible_apps, set_codex_auth_preservation,
+        OutboundProxyCommand,
+    };
+    use crate::settings::{AppSettings, VisibleApps, VisibleAppsMode};
     use crate::test_support::TestEnvGuard;
     use serial_test::serial;
     use std::fs;
@@ -848,6 +871,19 @@ mod tests {
     struct SettingsTestGuard {
         _env: TestEnvGuard,
         _temp: TempDir,
+    }
+
+    #[test]
+    fn official_codex_sessions_need_migrate_when_unify_is_on_without_opt_in() {
+        let mut settings = AppSettings::default();
+        assert!(official_codex_sessions_need_migrate(&settings));
+
+        settings.unify_codex_migrate_existing = Some(true);
+        assert!(!official_codex_sessions_need_migrate(&settings));
+
+        settings.unify_codex_migrate_existing = None;
+        settings.unify_codex_session_history = false;
+        assert!(!official_codex_sessions_need_migrate(&settings));
     }
 
     #[test]

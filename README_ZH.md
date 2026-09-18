@@ -20,7 +20,7 @@
 
 这是 [CC-Switch CLI](https://github.com/saladday/cc-switch-cli) 的个人轻量化分支（更上游为 [CC-Switch](https://github.com/farion1231/cc-switch)）。只保留 Claude / Codex / Hermes / Pi 的供应商切换，去掉赞助商推广，以及 MCP、Skills、Sessions、Usage 等默认入口。
 
-保留官方 Codex OAuth。统一 Codex 会话历史（`model_provider = custom`）默认开启。本地代理仍可选：`cc-switch proxy enable`，用于 API 格式转换。
+保留官方 Codex OAuth。统一 Codex 会话历史（`model_provider = custom`）默认开启。已有官方（`openai`）会话仍留在原桶，需要时再执行 `cc-switch settings codex-history migrate-existing`。本地代理仍可选：`cc-switch proxy enable`，用于 API 格式转换。
 
 ---
 

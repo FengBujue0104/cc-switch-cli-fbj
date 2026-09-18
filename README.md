@@ -20,7 +20,7 @@ English | [中文](README_ZH.md)
 
 Personal lightweight fork of [CC-Switch CLI](https://github.com/saladday/cc-switch-cli) (upstream [CC-Switch](https://github.com/farion1231/cc-switch)). It keeps provider switching for Claude, Codex, Hermes, and Pi. Partner promotions and extra surfaces (MCP, Skills, Sessions, Usage) are removed from the default CLI/TUI.
 
-Official Codex OAuth is kept. Unified Codex session history (`model_provider = custom`) is on by default. The local proxy remains optional (`cc-switch proxy enable`) for API format conversion.
+Official Codex OAuth is kept. Unified Codex session history (`model_provider = custom`) is on by default. Existing official (`openai`) sessions stay in that bucket until `cc-switch settings codex-history migrate-existing`. The local proxy remains optional (`cc-switch proxy enable`) for API format conversion.
 
 ---
 
