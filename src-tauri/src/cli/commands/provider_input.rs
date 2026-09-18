@@ -1789,116 +1789,18 @@ requires_openai_auth = true
     }
 
     #[test]
-    #[ignore = "sponsor presets removed from personal fork"]
     fn cli_sponsor_templates_are_no_longer_seedable() {
         assert!(
             build_provider_template_seed(&AppType::Codex, ProviderAddTemplate::Packycode, &[])
                 .is_err()
         );
-        return;
-        let codex =
-            build_provider_template_seed(&AppType::Codex, ProviderAddTemplate::Packycode, &[])
-                .expect("build PackyCode Codex provider");
-        let codex_config = codex
-            .settings_config
-            .get("config")
-            .and_then(Value::as_str)
-            .expect("Codex sponsor config should be TOML string");
-        assert_eq!(codex.name, "PackyCode");
-        assert!(codex_config.contains("base_url = \"https://www.packyapi.ai/v1\""));
-        assert!(codex_config.contains("model = \"gpt-5.6-sol\""));
-        assert!(codex_config.contains("wire_api = \"responses\""));
-        assert_eq!(
-            codex
-                .meta
-                .as_ref()
-                .and_then(|meta| meta.partner_promotion_key.as_deref()),
-            Some("packycode")
+        assert!(
+            build_provider_template_seed(&AppType::OpenCode, ProviderAddTemplate::Aicodemirror, &[])
+                .is_err()
         );
-        assert_eq!(
-            codex.meta.as_ref().and_then(|meta| meta.is_partner),
-            Some(true)
-        );
-        assert_eq!(
-            codex
-                .meta
-                .as_ref()
-                .and_then(|meta| meta.api_format.as_deref()),
-            Some("openai_responses")
-        );
-
-        let opencode = build_provider_template_seed(
-            &AppType::OpenCode,
-            ProviderAddTemplate::Aicodemirror,
-            &[],
-        )
-        .expect("build AICodeMirror OpenCode provider");
-        assert_eq!(opencode.settings_config["npm"], "@ai-sdk/anthropic");
-        assert_eq!(
-            opencode.settings_config["options"]["baseURL"],
-            "https://api.aicodemirror.ai/api/claudecode"
-        );
-        assert_eq!(
-            opencode.settings_config["models"]["claude-opus-5"]["name"],
-            "Claude Opus 5"
-        );
-        assert_eq!(
-            opencode
-                .meta
-                .as_ref()
-                .and_then(|meta| meta.partner_promotion_key.as_deref()),
-            Some("aicodemirror")
-        );
-
-        let hermes =
-            build_provider_template_seed(&AppType::Hermes, ProviderAddTemplate::Aicodemirror, &[])
-                .expect("build AICodeMirror Hermes provider");
-        assert_eq!(hermes.settings_config["api_mode"], "anthropic_messages");
-        assert_eq!(
-            hermes.settings_config["base_url"],
-            "https://api.aicodemirror.ai/api/claudecode"
-        );
-        assert!(hermes.settings_config.get("api_key").is_none());
-        assert_eq!(
-            hermes.settings_config["models"],
-            json!([
-                { "id": "claude-opus-5", "name": "Claude Opus 5" },
-                { "id": "claude-sonnet-5", "name": "Claude Sonnet 5" },
-                { "id": "claude-haiku-4-5-20251001", "name": "Claude Haiku 4.5" },
-            ])
-        );
-
-        let openclaw =
+        assert!(
             build_provider_template_seed(&AppType::OpenClaw, ProviderAddTemplate::Cubence, &[])
-                .expect("build Cubence OpenClaw provider");
-        assert_eq!(openclaw.settings_config["api"], "anthropic-messages");
-        assert_eq!(
-            openclaw.settings_config["baseUrl"],
-            "https://api.cubence.com"
-        );
-        assert_eq!(
-            openclaw.settings_config["models"],
-            json!([
-                {
-                    "id": "claude-opus-5",
-                    "name": "Claude Opus 5",
-                    "contextWindow": 1000000,
-                    "cost": { "input": 5, "output": 25 },
-                },
-                {
-                    "id": "claude-sonnet-5",
-                    "name": "Claude Sonnet 5",
-                    "contextWindow": 1000000,
-                    "cost": { "input": 3, "output": 15 },
-                },
-            ])
-        );
-        assert_eq!(
-            openclaw
-                .meta
-                .as_ref()
-                .and_then(|meta| meta.partner_promotion_key.as_deref()),
-            Some("cubence")
+                .is_err()
         );
     }
 

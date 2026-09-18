@@ -105,90 +105,6 @@ fn claude_opus(id: &str) -> Value {
     })
 }
 
-fn gpt_5_6_sol() -> Value {
-    json!({
-        "name": "GPT-5.6 Sol",
-        "reasoning": true,
-        "input": ["text", "image"],
-        "contextWindow": 272_000,
-        "maxTokens": 128_000,
-        "id": "gpt-5.6-sol",
-        "thinkingLevelMap": {},
-    })
-}
-
-fn glm_5_1() -> Value {
-    json!({
-        "name": "GLM-5.1",
-        "reasoning": true,
-        "input": ["text"],
-        "contextWindow": 200_000,
-        "maxTokens": 131_072,
-        "id": "glm-5.1",
-        "thinkingLevelMap": {},
-    })
-}
-
-fn anthropic_settings(name: &str, base_url: &str) -> Value {
-    json!({
-        "name": name,
-        "baseUrl": base_url,
-        "api": "anthropic-messages",
-        "apiKey": "",
-        "models": [
-            claude_sonnet("claude-sonnet-5"),
-            claude_opus("claude-opus-5"),
-        ],
-    })
-}
-
-fn openai_gpt_settings(name: &str, base_url: &str) -> Value {
-    json!({
-        "name": name,
-        "baseUrl": base_url,
-        "api": "openai-completions",
-        "apiKey": "",
-        "models": [gpt_5_6_sol()],
-    })
-}
-
-fn packycode_settings() -> Value {
-    anthropic_settings("PackyCode", "https://www.packyapi.ai")
-}
-
-fn aicodemirror_settings() -> Value {
-    anthropic_settings("AICodeMirror", "https://api.aicodemirror.ai/api/claudecode")
-}
-
-fn fenno_settings() -> Value {
-    openai_gpt_settings("FennoAI", "https://api.fenno.ai/v1")
-}
-
-fn runapi_settings() -> Value {
-    let mut settings = anthropic_settings("RunAPI", "https://runapi.co");
-    settings["models"]
-        .as_array_mut()
-        .expect("Pi RunAPI models are an array")
-        .push(json!({
-            "name": "Claude Haiku 4.5 (latest)",
-            "reasoning": true,
-            "input": ["text", "image"],
-            "contextWindow": 200_000,
-            "maxTokens": 64_000,
-            "id": "claude-haiku-4-5",
-            "thinkingLevelMap": {},
-        }));
-    settings
-}
-
-fn qiniu_settings() -> Value {
-    openai_gpt_settings("Qiniu", "https://api.qnaigc.com/v1")
-}
-
-fn cubence_settings() -> Value {
-    anthropic_settings("Cubence", "https://api.cubence.com")
-}
-
 fn deepseek_model(name: &str, id: &str) -> Value {
     json!({
         "name": name,
@@ -220,6 +136,18 @@ fn deepseek_settings() -> Value {
     })
 }
 
+fn glm_5_1() -> Value {
+    json!({
+        "name": "GLM-5.1",
+        "reasoning": true,
+        "input": ["text"],
+        "contextWindow": 200_000,
+        "maxTokens": 131_072,
+        "id": "glm-5.1",
+        "thinkingLevelMap": {},
+    })
+}
+
 fn zhipu_glm_settings() -> Value {
     json!({
         "name": "Zhipu GLM",
@@ -227,34 +155,6 @@ fn zhipu_glm_settings() -> Value {
         "api": "openai-completions",
         "apiKey": "",
         "models": [glm_5_1()],
-    })
-}
-
-fn zhipu_glm_en_settings() -> Value {
-    json!({
-        "name": "Zhipu GLM en",
-        "baseUrl": "https://api.z.ai/api/coding/paas/v4",
-        "api": "openai-completions",
-        "apiKey": "",
-        "models": [glm_5_1()],
-    })
-}
-
-fn modelscope_settings() -> Value {
-    json!({
-        "name": "ModelScope",
-        "baseUrl": "https://api-inference.modelscope.cn/v1",
-        "api": "openai-completions",
-        "apiKey": "",
-        "models": [{
-            "name": "GLM-5.2",
-            "reasoning": true,
-            "input": ["text"],
-            "contextWindow": 1_000_000,
-            "maxTokens": 131_072,
-            "id": "ZhipuAI/GLM-5.2",
-            "thinkingLevelMap": {},
-        }],
     })
 }
 
@@ -304,113 +204,6 @@ fn xiaomi_mimo_settings() -> Value {
         "models": [
             xiaomi_model("MiMo-V2.5-Pro", "mimo-v2.5-pro", &["text"], true),
             xiaomi_model("MiMo-V2.5", "mimo-v2.5", &["text", "image"], true),
-        ],
-    })
-}
-
-fn xiaomi_mimo_token_plan_settings() -> Value {
-    json!({
-        "name": "Xiaomi MiMo Token Plan (China)",
-        "baseUrl": "https://token-plan-cn.xiaomimimo.com/v1",
-        "api": "openai-completions",
-        "apiKey": "",
-        "models": [
-            xiaomi_model("MiMo-V2.5-Pro", "mimo-v2.5-pro", &["text"], false),
-            xiaomi_model("MiMo-V2.5", "mimo-v2.5", &["text", "image"], false),
-        ],
-    })
-}
-
-fn opencode_compat(extra: Value) -> Value {
-    let mut compat = json!({
-        "supportsStore": false,
-        "supportsDeveloperRole": false,
-        "maxTokensField": "max_tokens",
-    });
-    if let (Some(compat), Some(extra)) = (compat.as_object_mut(), extra.as_object()) {
-        compat.extend(extra.clone());
-    }
-    compat
-}
-
-fn opencode_go_settings() -> Value {
-    let thinking_levels = json!({
-        "minimal": null,
-        "low": null,
-        "medium": null,
-        "high": "high",
-        "max": "max",
-    });
-    json!({
-        "name": "OpenCode Go",
-        "baseUrl": "https://opencode.ai/zen/go/v1",
-        "api": "openai-completions",
-        "apiKey": "",
-        "models": [
-            {
-                "name": "GLM 5.2",
-                "reasoning": true,
-                "input": ["text"],
-                "contextWindow": 1_000_000,
-                "maxTokens": 131_072,
-                "id": "glm-5.2",
-                "compat": opencode_compat(json!({})),
-                "thinkingLevelMap": {
-                    "off": null,
-                    "minimal": null,
-                    "low": null,
-                    "medium": null,
-                    "high": "high",
-                    "xhigh": null,
-                    "max": "max",
-                },
-            },
-            {
-                "name": "Kimi K2.7 Code",
-                "reasoning": true,
-                "input": ["text", "image"],
-                "contextWindow": 262_144,
-                "maxTokens": 262_144,
-                "id": "kimi-k2.7-code",
-                "compat": opencode_compat(json!({})),
-                "thinkingLevelMap": {},
-            },
-            {
-                "name": "DeepSeek V4 Pro",
-                "reasoning": true,
-                "input": ["text"],
-                "contextWindow": 1_000_000,
-                "maxTokens": 384_000,
-                "id": "deepseek-v4-pro",
-                "compat": opencode_compat(json!({
-                    "requiresReasoningContentOnAssistantMessages": true,
-                    "thinkingFormat": "deepseek",
-                })),
-                "thinkingLevelMap": thinking_levels.clone(),
-            },
-            {
-                "name": "DeepSeek V4 Flash",
-                "reasoning": true,
-                "input": ["text"],
-                "contextWindow": 1_000_000,
-                "maxTokens": 384_000,
-                "id": "deepseek-v4-flash",
-                "compat": opencode_compat(json!({
-                    "requiresReasoningContentOnAssistantMessages": true,
-                    "thinkingFormat": "deepseek",
-                })),
-                "thinkingLevelMap": thinking_levels,
-            },
-            {
-                "name": "MiMo-V2.5-Pro",
-                "reasoning": true,
-                "input": ["text"],
-                "contextWindow": 1_048_576,
-                "maxTokens": 131_072,
-                "id": "mimo-v2.5-pro",
-                "compat": opencode_compat(json!({})),
-                "thinkingLevelMap": {},
-            },
         ],
     })
 }

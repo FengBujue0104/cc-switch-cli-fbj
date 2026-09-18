@@ -5,11 +5,8 @@ use serde_json::{json, Value};
 pub(crate) enum BuiltinProviderPresetId {
     DeepSeek,
     ZhipuGlm,
-    ZhipuGlmEn,
-    ModelScope,
     MiniMax,
     XiaomiMimo,
-    XiaomiMimoTokenPlan,
     OpenCodeGo,
     OpenRouter,
 }
@@ -123,34 +120,6 @@ fn claude_provider_preset(preset: BuiltinProviderPresetId) -> Value {
             "#0F62FE",
             None,
         ),
-        ZhipuGlmEn => claude_provider(
-            "Zhipu GLM en",
-            "https://z.ai",
-            "https://api.z.ai/api/anthropic",
-            "ANTHROPIC_AUTH_TOKEN",
-            "glm-5.1",
-            "glm-5.1",
-            "glm-5.1",
-            "glm-5.1",
-            "cn_official",
-            "zhipu",
-            "#0F62FE",
-            None,
-        ),
-        ModelScope => claude_provider(
-            "ModelScope",
-            "https://modelscope.cn",
-            "https://api-inference.modelscope.cn",
-            "ANTHROPIC_AUTH_TOKEN",
-            "ZhipuAI/GLM-5.2",
-            "ZhipuAI/GLM-5.2",
-            "ZhipuAI/GLM-5.2",
-            "ZhipuAI/GLM-5.2",
-            "aggregator",
-            "modelscope",
-            "#624AFF",
-            None,
-        ),
         MiniMax => claude_provider(
             "MiniMax",
             "https://platform.minimaxi.com",
@@ -172,20 +141,6 @@ fn claude_provider_preset(preset: BuiltinProviderPresetId) -> Value {
             "Xiaomi MiMo",
             "https://platform.xiaomimimo.com",
             "https://api.xiaomimimo.com/anthropic",
-            "ANTHROPIC_AUTH_TOKEN",
-            "mimo-v2.5-pro",
-            "mimo-v2.5-pro",
-            "mimo-v2.5-pro",
-            "mimo-v2.5-pro",
-            "cn_official",
-            "xiaomimimo",
-            "#000000",
-            None,
-        ),
-        XiaomiMimoTokenPlan => claude_provider(
-            "Xiaomi MiMo Token Plan (China)",
-            "https://platform.xiaomimimo.com/#/token-plan",
-            "https://token-plan-cn.xiaomimimo.com/anthropic",
             "ANTHROPIC_AUTH_TOKEN",
             "mimo-v2.5-pro",
             "mimo-v2.5-pro",
@@ -356,57 +311,23 @@ fn codex_provider_preset(preset: BuiltinProviderPresetId) -> Value {
             ],
             None,
         ),
-        ZhipuGlm | ZhipuGlmEn => {
-            let (name, website, provider_name, base_url) = if preset == ZhipuGlm {
-                (
-                    "Zhipu GLM",
-                    "https://open.bigmodel.cn",
-                    "zhipu_glm",
-                    "https://open.bigmodel.cn/api/coding/paas/v4",
-                )
-            } else {
-                (
-                    "Zhipu GLM en",
-                    "https://z.ai",
-                    "zhipu_glm_en",
-                    "https://api.z.ai/api/coding/paas/v4",
-                )
-            };
-            codex_provider(
-                name,
-                website,
-                provider_name,
-                base_url,
-                "glm-5.2",
-                "cn_official",
-                "zhipu",
-                "#0F62FE",
-                Some("openai_chat"),
-                vec![json!({
-                    "model": "glm-5.2",
-                    "displayName": "GLM-5.2",
-                    "contextWindow": 200_000,
-                    "reasoningLevels": ["none", "high"],
-                })],
-                Some(chat_reasoning("thinking", false, None)),
-            )
-        }
-        ModelScope => codex_provider(
-            "ModelScope",
-            "https://modelscope.cn",
-            "modelscope",
-            "https://api-inference.modelscope.cn/v1",
-            "ZhipuAI/GLM-5.2",
-            "aggregator",
-            "modelscope",
-            "#624AFF",
+        ZhipuGlm => codex_provider(
+            "Zhipu GLM",
+            "https://open.bigmodel.cn",
+            "zhipu_glm",
+            "https://open.bigmodel.cn/api/coding/paas/v4",
+            "glm-5.2",
+            "cn_official",
+            "zhipu",
+            "#0F62FE",
             Some("openai_chat"),
             vec![json!({
-                "model": "ZhipuAI/GLM-5.2",
-                "displayName": "ZhipuAI / GLM-5.2",
+                "model": "glm-5.2",
+                "displayName": "GLM-5.2",
                 "contextWindow": 200_000,
+                "reasoningLevels": ["none", "high"],
             })],
-            Some(chat_reasoning("enable_thinking", false, None)),
+            Some(chat_reasoning("thinking", false, None)),
         ),
         MiniMax => codex_provider(
             "MiniMax",
@@ -429,36 +350,19 @@ fn codex_provider_preset(preset: BuiltinProviderPresetId) -> Value {
             })],
             None,
         ),
-        XiaomiMimo | XiaomiMimoTokenPlan => {
-            let (name, website, provider_name, base_url) = if preset == XiaomiMimo {
-                (
-                    "Xiaomi MiMo",
-                    "https://platform.xiaomimimo.com",
-                    "xiaomi_mimo",
-                    "https://api.xiaomimimo.com/v1",
-                )
-            } else {
-                (
-                    "Xiaomi MiMo Token Plan (China)",
-                    "https://platform.xiaomimimo.com/#/token-plan",
-                    "xiaomi_mimo_token_plan",
-                    "https://token-plan-cn.xiaomimimo.com/v1",
-                )
-            };
-            codex_provider(
-                name,
-                website,
-                provider_name,
-                base_url,
-                "mimo-v2.5-pro",
-                "cn_official",
-                "xiaomimimo",
-                "#000000",
-                Some("openai_responses"),
-                mimo_catalog(),
-                None,
-            )
-        }
+        XiaomiMimo => codex_provider(
+            "Xiaomi MiMo",
+            "https://platform.xiaomimimo.com",
+            "xiaomi_mimo",
+            "https://api.xiaomimimo.com/v1",
+            "mimo-v2.5-pro",
+            "cn_official",
+            "xiaomimimo",
+            "#000000",
+            Some("openai_responses"),
+            mimo_catalog(),
+            None,
+        ),
         OpenCodeGo => with_opencode_go_usage_script(codex_provider(
             "OpenCode Go",
             "https://opencode.ai/go",
