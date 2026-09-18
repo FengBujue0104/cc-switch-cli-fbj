@@ -6,7 +6,7 @@
 
 **Switch Claude Code, Codex, Hermes, and Pi providers from one TUI or CLI.**
 
-[![Version](https://img.shields.io/badge/version-5.10.5-blue.svg)](https://github.com/FengBujue0104/cc-switch-cli-fbj/releases)
+[![Version](https://img.shields.io/badge/version-5.10.6-blue.svg)](https://github.com/FengBujue0104/cc-switch-cli-fbj/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%20x64%20%7C%20Linux%20x64-lightgrey.svg)](https://github.com/FengBujue0104/cc-switch-cli-fbj/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
@@ -55,7 +55,7 @@ cc-switch update --check
 cc-switch update
 ```
 
-Updates come from [this repo's GitHub Releases](https://github.com/FengBujue0104/cc-switch-cli-fbj/releases), not upstream SaladDay. `cc-switch update` verifies SHA-256 from `checksums.txt` (or GitHub's asset digest). Binaries that still report `5.10.5` skip tag `v5.10.5-fbj.1` (semver treats the prerelease as older); reinstall once with the script above, then later tags such as `v5.10.6` self-update.
+Updates come from [this repo's GitHub Releases](https://github.com/FengBujue0104/cc-switch-cli-fbj/releases), not upstream SaladDay. `cc-switch update` verifies SHA-256 from `checksums.txt` (or GitHub's asset digest). This source is `5.10.6`; the published tag is still `v5.10.5-fbj.1` until the next local publish. Reinstall with the script above to pick up updater/repo fixes, then later tags such as `v5.10.6` self-update.
 
 Publish a new tag from a dev machine (no GitHub Actions):
 

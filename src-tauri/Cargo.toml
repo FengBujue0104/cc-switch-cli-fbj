@@ -1,6 +1,6 @@
 [package]
 name = "cc-switch"
-version = "5.10.5"
+version = "5.10.6"
 description = "Provider switcher for Claude Code, Codex, Hermes, and Pi"
 authors = ["Jason Young", "saladday", "FengBujue0104"]
 license = "MIT"
