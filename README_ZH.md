@@ -95,18 +95,21 @@ cc-switch --app pi provider list        # 管理 Pi 供应商
 
 ## 📥 安装
 
-### 方法 1：快速安装（macOS / Linux）
-
-> Windows 用户请参考下方手动安装。
+### 方法 1：快速安装（Linux x86_64）
 
 ```bash
-curl -fsSL https://github.com/SaladDay/cc-switch-cli/releases/latest/download/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/FengBujue0104/cc-switch-cli-fbj/main/install.sh | bash
 ```
 
-默认安装到 `~/.local/bin`。设置 `CC_SWITCH_INSTALL_DIR` 可自定义安装目录。
+默认装到 `~/.local/bin`。可用 `CC_SWITCH_INSTALL_DIR` 改目录。已有文件会在 TTY 里确认；非交互覆盖请设 `CC_SWITCH_FORCE=1`。
 
-- 如果目标文件已存在，安装脚本会在 TTY 中提示确认；在非交互环境中，只有设置 `CC_SWITCH_FORCE=1` 才会覆盖。
-- Linux 的 auto 模式固定使用静态 musl 构建，不会回退到 glibc。仅在明确需要且系统兼容时设置 `CC_SWITCH_LINUX_LIBC=glibc`。
+Windows：
+
+```powershell
+irm https://raw.githubusercontent.com/FengBujue0104/cc-switch-cli-fbj/main/install.ps1 | iex
+```
+
+发版用 `scripts/publish-release.sh` 在本机打包上传，不走 GitHub Actions。
 
 <details>
 <summary>手动安装</summary>
