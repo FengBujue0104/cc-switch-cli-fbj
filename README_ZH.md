@@ -6,7 +6,7 @@
 
 **在一个 TUI / CLI 里切换 Claude Code、Codex、Hermes、Pi 的供应商。**
 
-[![Version](https://img.shields.io/badge/version-5.10.6-blue.svg)](https://github.com/FengBujue0104/cc-switch-cli-fbj/releases)
+[![Version](https://img.shields.io/badge/version-5.11.0-blue.svg)](https://github.com/FengBujue0104/cc-switch-cli-fbj/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%20x64%20%7C%20Linux%20x64-lightgrey.svg)](https://github.com/FengBujue0104/cc-switch-cli-fbj/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
@@ -57,12 +57,12 @@ cc-switch update --check
 cc-switch update
 ```
 
-更新源是 [本仓库的 GitHub Releases](https://github.com/FengBujue0104/cc-switch-cli-fbj/releases)，不是上游 SaladDay。`cc-switch update` 会用 `checksums.txt`（或 GitHub 资源 digest）做 SHA-256 校验。当前源码是 `5.10.6`，已发布标签仍是 `v5.10.5-fbj.1`，等下一次本地发版。先用上面的脚本重装一次以拿到 updater 修复，之后的 `v5.10.6` 等标签即可自更新。
+更新源是 [本仓库的 GitHub Releases](https://github.com/FengBujue0104/cc-switch-cli-fbj/releases)，不是上游 SaladDay。`cc-switch update` 会用 `checksums.txt`（或 GitHub 资源 digest）做 SHA-256 校验。当前源码是 `5.11.0`，已发布标签仍是 `v5.10.6`，等下一次本地发版。已经在 `5.10.6` 的安装可以直接自更新到 `v5.11.0`。
 
 本机发版（不走 GitHub Actions）：
 
 ```bash
-scripts/publish-release.sh v5.10.6
+scripts/publish-release.sh v5.11.0
 ```
 
 ---
