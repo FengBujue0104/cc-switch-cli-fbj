@@ -99,7 +99,9 @@ fn show_proxy() -> Result<(), AppError> {
 }
 
 fn set_proxy_enabled(app_type: AppType, enabled: bool) -> Result<(), AppError> {
-    if !matches!(app_type, AppType::Claude | AppType::Codex | AppType::Gemini) {
+    // 只认接管真正落地的那几个 harness：`AppType::Gemini` 已从本构建移除，clap
+    // 的 `value_enum` 也不会再放它进来，留着只会是一条永不执行的分支。
+    if !matches!(app_type, AppType::Claude | AppType::Codex) {
         return Err(AppError::InvalidInput(format!(
             "proxy takeover is not supported for {}",
             app_type.as_str()
@@ -147,9 +149,7 @@ fn configure_proxy(
     if let Some(port) = listen_port {
         validate_proxy_listen_port(port)?;
     }
-    if listen_port.is_some()
-        && !matches!(app_type, AppType::Claude | AppType::Codex | AppType::Gemini)
-    {
+    if listen_port.is_some() && !matches!(app_type, AppType::Claude | AppType::Codex) {
         return Err(AppError::InvalidInput(format!(
             "proxy takeover is not supported for {}",
             app_type.as_str()
@@ -288,8 +288,8 @@ fn serve_proxy(
             println!(
                 "{}",
                 info(crate::t!(
-                    "Claude: /v1/messages · Codex: /v1/chat/completions + /v1/responses · Gemini: /v1beta/*",
-                    "Claude: /v1/messages · Codex: /v1/chat/completions + /v1/responses · Gemini: /v1beta/*"
+                    "Claude: /v1/messages · Codex: /v1/chat/completions + /v1/responses",
+                    "Claude: /v1/messages · Codex: /v1/chat/completions + /v1/responses"
                 ))
             );
             if !takeovers.is_empty() {
@@ -403,7 +403,9 @@ async fn apply_takeovers(
 ) -> Result<(), String> {
     for app in takeovers {
         match app {
-            AppType::Claude | AppType::Codex | AppType::Gemini => {
+            // Gemini 不在名单里：clap 的 `--takeover` 走 `value_enum`，本构建已经
+            // 不再产出 `AppType::Gemini`，留着这条只是给已删 harness 开一条后门。
+            AppType::Claude | AppType::Codex => {
                 service.set_takeover_for_app(app.as_str(), true).await?;
             }
             _ => {
@@ -434,7 +436,9 @@ fn apply_overrides(
 }
 
 fn load_proxy_app_ports(state: &AppState) -> Result<Vec<(AppType, u16)>, AppError> {
-    [AppType::Claude, AppType::Codex, AppType::Gemini]
+    // 只读保留 harness 的端口。Gemini 那一行只会去翻 SQLite 里的旧数据，而
+    // `build_proxy_route_lines` 永远不会用它，纯属白读一次库。
+    [AppType::Claude, AppType::Codex]
         .into_iter()
         .map(|app| {
             state
@@ -451,10 +455,12 @@ fn build_proxy_route_lines(
     app_ports: &[(AppType, u16)],
     takeovers: &crate::proxy::types::ProxyTakeoverStatus,
 ) -> Vec<String> {
+    // 只列本构建保留的 harness。`takeovers.gemini` 字段和 Gemini adapter 仍在
+    // （旧数据/旧连接要能解析），但不在任何用户可见的汇总里出现，否则
+    // `cc-switch proxy show` 会把已删 harness 又列回用户眼前。
     [
         (AppType::Claude, "Claude", takeovers.claude),
         (AppType::Codex, "Codex", takeovers.codex),
-        (AppType::Gemini, "Gemini", takeovers.gemini),
     ]
     .into_iter()
     .map(|(app, label, enabled)| {
@@ -537,7 +543,7 @@ fn build_proxy_overview_lines(
             }
         ),
         format!(
-            "{}: Claude={}, Codex={}, Gemini={}",
+            "{}: Claude={}, Codex={}",
             crate::t!("Active routes", "活动路由"),
             if takeovers.claude {
                 crate::t!("on", "开启")
@@ -549,11 +555,6 @@ fn build_proxy_overview_lines(
             } else {
                 crate::t!("off", "关闭")
             },
-            if takeovers.gemini {
-                crate::t!("on", "开启")
-            } else {
-                crate::t!("off", "关闭")
-            }
         ),
         format!(
             "{}: {}",
@@ -608,7 +609,9 @@ fn build_proxy_overview_lines(
         crate::t!("Routes:", "路由：").to_string(),
         "- Claude: /v1/messages, /claude/v1/messages".to_string(),
         "- Codex: /chat/completions, /v1/chat/completions, /responses, /v1/responses".to_string(),
-        "- Gemini: /v1beta/*, /gemini/v1beta/*".to_string(),
+        // 注意：`/v1beta/*` 与 `/gemini/v1beta/*` 的转发 handler 仍然存在（旧的
+        // Gemini 连接和 `tests/proxy_multi_app_passthrough.rs` 仍依赖它），只是
+        // 不再在这里列出——路由清单是用户可见的 harness 名单。
         String::new(),
         crate::t!(
             "Issue #49 manual Claude setup:",
@@ -648,26 +651,35 @@ fn build_proxy_overview_lines(
     lines
 }
 
+fn proxy_auto_failover_label(app: &AppType) -> &'static str {
+    match app {
+        AppType::Claude => "Claude",
+        AppType::Codex => "Codex",
+        // `supports_failover()` 目前只认 Claude/Codex；这里显式列出剩余分支，
+        // 将来新增支持故障转移的 harness 时编译器会提醒补上文案。
+        _ => "Unknown",
+    }
+}
+
 fn build_auto_failover_status_lines(state: &AppState) -> Vec<String> {
-    [
-        (AppType::Claude, "Claude"),
-        (AppType::Codex, "Codex"),
-        (AppType::Gemini, "Gemini"),
-    ]
-    .into_iter()
-    .map(|(app, label)| {
-        let (_, auto_failover_enabled) = state.db.get_proxy_flags_sync(app.as_str());
-        format!(
-            "- {}: {}",
-            label,
-            if auto_failover_enabled {
-                crate::t!("auto failover on", "自动故障转移开启")
-            } else {
-                crate::t!("auto failover off", "自动故障转移关闭")
-            }
-        )
-    })
-    .collect()
+    // 只列真正支持故障转移的 harness。`supports_failover()` 已经收敛到
+    // Claude/Codex，给 Hermes/Pi 或已删的 Gemini 各打一行 "auto failover off"
+    // 只会误导用户——这些应用永远不会有这个开关。
+    AppType::all()
+        .filter(|app| app.supports_failover())
+        .map(|app| {
+            let (_, auto_failover_enabled) = state.db.get_proxy_flags_sync(app.as_str());
+            format!(
+                "- {}: {}",
+                proxy_auto_failover_label(&app),
+                if auto_failover_enabled {
+                    crate::t!("auto failover on", "自动故障转移开启")
+                } else {
+                    crate::t!("auto failover off", "自动故障转移关闭")
+                }
+            )
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -778,14 +790,16 @@ mod tests {
                 || output.contains("Codex: 关闭, 配置 15722"),
             "proxy show output should include Codex configured port even when stopped"
         );
+        // Gemini 已从本构建中移除：即便是数据库里残留的 route/port 和活着的 worker，
+        // `proxy show` 也不能把它列回用户眼前（`ProxyTakeoverStatus::gemini` 字段本身
+        // 仍保留，只为了能解析旧 IPC/旧数据）。
         assert!(
-            output.contains("Gemini: enabled, configured 15723, running 127.0.0.1:15723 pid=1003")
-                || output.contains("Gemini: 开启, 配置 15723, 运行 127.0.0.1:15723 pid=1003"),
-            "proxy show output should include Gemini configured and runtime ports"
+            !output.contains("Gemini") && !output.contains("gemini"),
+            "proxy show output must not resurrect a removed harness, got: {output}"
         );
         assert!(
-            output.contains("Active routes: Claude=on, Codex=off, Gemini=on")
-                || output.contains("活动路由: Claude=开启, Codex=关闭, Gemini=开启"),
+            output.contains("Active routes: Claude=on, Codex=off")
+                || output.contains("活动路由: Claude=开启, Codex=关闭"),
             "proxy show output should summarize app-specific active routes"
         );
         assert!(

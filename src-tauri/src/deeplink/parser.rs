@@ -78,13 +78,16 @@ fn parse_provider_deeplink(
         .ok_or_else(|| AppError::InvalidInput("Missing 'app' parameter".to_string()))?
         .clone();
 
-    // Validate app type
-    if !matches!(
-        app.as_str(),
-        "claude" | "codex" | "gemini" | "opencode" | "openclaw" | "hermes"
-    ) {
+    // Validate app type against the harness set this build actually ships. The
+    // list is derived from `AppType::all()`, never written out: a hardcoded list
+    // here is how gemini/opencode/openclaw stayed reachable — the link parsed,
+    // the import ran, and a removed harness's live config got written. Pi is
+    // excluded on purpose: its providers come from the Pi provider page, not
+    // from a deep link.
+    if !super::is_supported_deeplink_provider_app(&app) {
         return Err(AppError::InvalidInput(format!(
-            "Invalid app type: must be 'claude', 'codex', 'gemini', 'opencode', 'openclaw', or 'hermes', got '{app}'"
+            "Invalid app type: must be one of {}, got '{app}'",
+            super::supported_deeplink_provider_app_ids()
         )));
     }
 
@@ -188,13 +191,12 @@ fn parse_prompt_deeplink(
         .ok_or_else(|| AppError::InvalidInput("Missing 'app' parameter for prompt".to_string()))?
         .clone();
 
-    // Validate app type
-    if !matches!(
-        app.as_str(),
-        "claude" | "codex" | "gemini" | "opencode" | "openclaw" | "hermes" | "pi"
-    ) {
+    // Same two-step contract as the provider branch: unknown ids and removed ids
+    // both fail here, at the first gate, before any import work happens.
+    if !super::is_supported_deeplink_app(&app) {
         return Err(AppError::InvalidInput(format!(
-            "Invalid app type: must be 'claude', 'codex', 'gemini', 'opencode', 'openclaw', 'hermes', or 'pi', got '{app}'"
+            "Invalid app type: must be one of {}, got '{app}'",
+            super::supported_deeplink_app_ids()
         )));
     }
 
@@ -259,15 +261,20 @@ fn parse_mcp_deeplink(
         .ok_or_else(|| AppError::InvalidInput("Missing 'apps' parameter for MCP".to_string()))?
         .clone();
 
-    // Validate apps format
+    // Validate apps format. Each token must be a harness this build can project
+    // MCP to. `parse_mcp_apps` re-checks this, but rejecting at parse time keeps a
+    // link that can never succeed from producing a request in the first place.
     for app in apps.split(',') {
         let trimmed = app.trim();
-        if !matches!(
-            trimmed,
-            "claude" | "codex" | "gemini" | "opencode" | "openclaw" | "hermes"
-        ) {
+        // A trailing separator ("claude,") is a typo, not an illegal id; the
+        // "at least one app" check downstream is what reports an empty list.
+        if trimmed.is_empty() {
+            continue;
+        }
+        if !super::is_supported_deeplink_mcp_app(trimmed) {
             return Err(AppError::InvalidInput(format!(
-                "Invalid app in 'apps': must be 'claude', 'codex', 'gemini', 'opencode', 'openclaw', or 'hermes', got '{trimmed}'"
+                "Invalid app in 'apps': must be one of {}, got '{trimmed}'",
+                super::supported_deeplink_mcp_app_ids()
             )));
         }
     }

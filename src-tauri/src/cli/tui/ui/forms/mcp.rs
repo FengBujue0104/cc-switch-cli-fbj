@@ -258,15 +258,14 @@ fn mcp_preview_value(mcp: &super::form::McpAddFormState) -> Value {
         }
     }
     root.insert("server".to_string(), Value::Object(server));
+    // `apps` 矩阵直接序列化结构体本身，而不是手抄一份键名表：这份预览的
+    // 意义是"照原样落库的内容"，手抄的键名会同时带来两个问题——结构体加字段
+    // 时预览静默变旧，删字段时又留下不存在的键。已删 harness 在落库格式里
+    // 仍有列（旧数据要能读回来），所以它们出现在这里是存储格式，不是可选开关；
+    // 表单里能改的开关集合由 `supported_mcp_apps()` 决定。
     root.insert(
         "apps".to_string(),
-        serde_json::json!({
-            "claude": mcp.apps.claude,
-            "codex": mcp.apps.codex,
-            "gemini": mcp.apps.gemini,
-            "opencode": mcp.apps.opencode,
-            "hermes": mcp.apps.hermes,
-        }),
+        serde_json::to_value(&mcp.apps).unwrap_or(Value::Object(Default::default())),
     );
     Value::Object(root)
 }
@@ -384,8 +383,6 @@ pub(crate) fn mcp_field_label_and_value(
         McpAddField::Headers => texts::tui_label_headers().to_string(),
         McpAddField::AppClaude => texts::tui_label_app_claude().to_string(),
         McpAddField::AppCodex => texts::tui_label_app_codex().to_string(),
-        McpAddField::AppGemini => texts::tui_label_app_gemini().to_string(),
-        McpAddField::AppOpenCode => texts::tui_label_app_opencode().to_string(),
         McpAddField::AppHermes => texts::tui_label_app_hermes().to_string(),
     };
 
@@ -405,20 +402,6 @@ pub(crate) fn mcp_field_label_and_value(
         }
         McpAddField::AppCodex => {
             if mcp.apps.codex {
-                format!("[{}]", texts::tui_marker_active())
-            } else {
-                "[ ]".to_string()
-            }
-        }
-        McpAddField::AppGemini => {
-            if mcp.apps.gemini {
-                format!("[{}]", texts::tui_marker_active())
-            } else {
-                "[ ]".to_string()
-            }
-        }
-        McpAddField::AppOpenCode => {
-            if mcp.apps.opencode {
                 format!("[{}]", texts::tui_marker_active())
             } else {
                 "[ ]".to_string()
@@ -497,11 +480,7 @@ fn mcp_add_form_key_items(
                         texts::tui_key_open()
                     }
                     Some(
-                        McpAddField::AppClaude
-                        | McpAddField::AppCodex
-                        | McpAddField::AppGemini
-                        | McpAddField::AppOpenCode
-                        | McpAddField::AppHermes,
+                        McpAddField::AppClaude | McpAddField::AppCodex | McpAddField::AppHermes,
                     ) => texts::tui_key_toggle(),
                     _ => texts::tui_key_edit_mode(),
                 };

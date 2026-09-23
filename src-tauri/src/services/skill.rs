@@ -511,13 +511,13 @@ fn parse_branch_from_source_url(source_url: Option<&str>) -> Option<String> {
 }
 
 fn get_agents_skills_dir() -> Option<PathBuf> {
-    dirs::home_dir()
+    crate::config::home_dir()
         .map(|home| home.join(".agents").join("skills"))
         .filter(|path| path.exists())
 }
 
 fn parse_agents_lock() -> HashMap<String, LockRepoInfo> {
-    let path = match dirs::home_dir() {
+    let path = match crate::config::home_dir() {
         Some(home) => home.join(".agents").join(".skill-lock.json"),
         None => return HashMap::new(),
     };
@@ -628,20 +628,27 @@ enum PiSkillDeployment {
 }
 
 impl SkillService {
+    /// 与 [`AppType::all()`] 一致：写入门槛，控制 `sync_to_app_dir` /
+    /// `sync_updated_skill_to_app` / `remove_from_app` / `sync_to_app_unlocked` /
+    /// `toggle_app` 五个入口是否真的往 app 目录写 `skills/`。
+    ///
+    /// 已删 harness 必须恒为 `false`。这三个分支原先只挡了 OpenClaw，Gemini 和
+    /// OpenCode 仍然漏过去——而 `AppType::from_str` 至今还能解析出旧 id，任何把
+    /// legacy 值传进来的调用方都会让 `create_dir_all` 在 `~/.gemini/skills` /
+    /// `~/.config/opencode/skills` 下造出真实目录。写成 `AppType::all()` 的成员
+    /// 判断，和 `McpApps::enabled_apps()`、`supported_skill_apps()` 等几个同族门槛
+    /// 保持同一个推导方式，将来 `all()` 再收窄时这里自动跟着收。
     fn app_supports_skills(app: &AppType) -> bool {
-        !matches!(app, AppType::OpenClaw)
+        AppType::all().any(|kept| &kept == app)
     }
 
+    /// 本构建支持的 harness 集合。
+    ///
+    /// 必须与 [`AppType::all()`] 一致：`sync_to_app_dir` 在写入前会用
+    /// `create_dir_all` 新建目标目录，多余条目会在已删 harness 的 live 目录下
+    /// 造出真实的 `skills/` 目录；SSOT 迁移的发现循环也会从这里取源目录。
     pub fn supported_skill_apps() -> impl Iterator<Item = AppType> {
-        [
-            AppType::Claude,
-            AppType::Codex,
-            AppType::Gemini,
-            AppType::OpenCode,
-            AppType::Hermes,
-            AppType::Pi,
-        ]
-        .into_iter()
+        AppType::all()
     }
 
     fn skill_source_apps() -> impl Iterator<Item = AppType> {
@@ -1880,6 +1887,9 @@ impl SkillService {
         marker_file
             .flush()
             .map_err(|error| AppError::io(&marker, error))?;
+        // Windows 拒绝重命名仍持有打开句柄的目录（ERROR_ACCESS_DENIED / os code 5），
+        // 所以先把 marker 句柄关掉再 rename；内容已 flush，之后读回校验不受影响。
+        drop(marker_file);
         fs::rename(&next, dest).map_err(|error| AppError::io(dest, error))?;
         Ok(())
     }
@@ -3756,6 +3766,19 @@ impl SkillService {
 mod tests {
     use super::*;
     use serial_test::serial;
+
+    /// `sync_to_app_dir` 写入前会 `create_dir_all` 目标目录，所以这个集合多一项
+    /// 就等于在已删 harness 的 live 目录下造一个真实的 `skills/`。必须和
+    /// `AppType::all()` 完全一致。
+    #[test]
+    fn supported_skill_apps_matches_app_type_all() {
+        let apps = SkillService::supported_skill_apps()
+            .map(|app| app.as_str())
+            .collect::<Vec<_>>();
+        let all = AppType::all().map(|app| app.as_str()).collect::<Vec<_>>();
+        assert_eq!(apps, all);
+        assert_eq!(apps, ["claude", "codex", "hermes", "pi"]);
+    }
 
     #[test]
     fn skill_state_lock_allows_snapshots_but_excludes_writers() {

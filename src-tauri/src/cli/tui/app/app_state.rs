@@ -63,12 +63,6 @@ pub enum Action {
     SkillsSync {
         app: Option<AppType>,
     },
-    SkillsSetSyncMethod {
-        method: SyncMethod,
-    },
-    SkillsSetStorageLocation {
-        location: SkillStorageLocation,
-    },
     SkillsDiscover {
         query: String,
         source: SkillsDiscoverSource,
@@ -339,9 +333,6 @@ pub enum Action {
     EnableProxyAndAutoFailover {
         app_type: AppType,
     },
-    SetOpenClawConfigDir {
-        path: Option<String>,
-    },
     SetPiConfigDir {
         path: Option<String>,
     },
@@ -353,19 +344,6 @@ pub enum Action {
         enabled: bool,
     },
     SetLanguage(Language),
-    SetVisibleAppsMode {
-        mode: crate::settings::VisibleAppsMode,
-    },
-    SetVisibleApps {
-        apps: crate::settings::VisibleApps,
-    },
-    ConfirmVisibleAppsAutoDetection {
-        use_auto: bool,
-    },
-    SwitchVisibleAppsToManual {
-        apps: crate::settings::VisibleApps,
-        selected: usize,
-    },
 
     CheckUpdate,
     ConfirmUpdate,
@@ -520,11 +498,6 @@ pub enum SettingsItem {
     Theme,
     Icons,
     PreferredEditor,
-    VisibleAppsMode,
-    VisibleApps,
-    SkillsStorageLocation,
-    SkillsSyncMethod,
-    OpenClawConfigDir,
     PiConfigDir,
     ManagedAccounts,
     SkipClaudeOnboarding,
@@ -537,17 +510,12 @@ pub enum SettingsItem {
 }
 
 impl SettingsItem {
-    pub const ALL: [SettingsItem; 18] = [
+    pub const ALL: [SettingsItem; 13] = [
         SettingsItem::ManagedAccounts,
         SettingsItem::Language,
         SettingsItem::Theme,
         SettingsItem::Icons,
         SettingsItem::PreferredEditor,
-        SettingsItem::VisibleAppsMode,
-        SettingsItem::VisibleApps,
-        SettingsItem::SkillsStorageLocation,
-        SettingsItem::SkillsSyncMethod,
-        SettingsItem::OpenClawConfigDir,
         SettingsItem::PiConfigDir,
         SettingsItem::SkipClaudeOnboarding,
         SettingsItem::ClaudePluginIntegration,

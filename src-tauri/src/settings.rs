@@ -119,22 +119,14 @@ impl Default for VisibleApps {
 
 impl VisibleApps {
     pub fn ordered_enabled(&self) -> Vec<AppType> {
-        app_order()
-            .into_iter()
-            .filter(|app_type| self.is_enabled_for(app_type))
-            .collect()
+        app_order().to_vec()
     }
 
     pub fn is_enabled_for(&self, app_type: &AppType) -> bool {
-        match app_type {
-            AppType::Claude => self.claude,
-            AppType::Codex => self.codex,
-            AppType::Gemini => self.gemini,
-            AppType::OpenCode => self.opencode,
-            AppType::Hermes => self.hermes,
-            AppType::OpenClaw => self.openclaw,
-            AppType::Pi => self.pi,
-        }
+        matches!(
+            app_type,
+            AppType::Claude | AppType::Codex | AppType::Hermes | AppType::Pi
+        )
     }
 
     pub fn set_enabled_for(&mut self, app_type: &AppType, enabled: bool) {
@@ -166,16 +158,16 @@ impl VisibleApps {
     }
 }
 
-fn app_order() -> [AppType; 7] {
-    [
-        AppType::Claude,
-        AppType::Codex,
-        AppType::Gemini,
-        AppType::OpenCode,
-        AppType::Hermes,
-        AppType::OpenClaw,
-        AppType::Pi,
-    ]
+/// 标签切换顺序。
+///
+/// 直接派生自 [`AppType::all()`]，避免出现第二份"本构建支持哪些 harness"的名单
+/// ——两份名单一旦漂移，`next_visible_app` 会把用户带回已删 harness 的标签页。
+fn app_order() -> [AppType; 4] {
+    let ordered = AppType::all().collect::<Vec<_>>();
+    match <[AppType; 4]>::try_from(ordered) {
+        Ok(ordered) => ordered,
+        Err(_) => panic!("AppType::all() must yield exactly the four supported harnesses"),
+    }
 }
 
 pub fn next_visible_app(
@@ -191,7 +183,13 @@ pub fn next_visible_app(
         return None;
     }
 
-    let current_index = ordered.iter().position(|app_type| app_type == current)?;
+    let Some(current_index) = ordered.iter().position(|app_type| app_type == current) else {
+        // A harness outside the supported list cannot anchor the cycle, so fall
+        // back to the first visible app instead of leaving the removed app in place.
+        return ordered
+            .into_iter()
+            .find(|app_type| visible.is_enabled_for(app_type));
+    };
     let step = if direction < 0 { -1 } else { 1 };
     let len = ordered.len() as isize;
 
@@ -1222,6 +1220,13 @@ pub fn get_visible_apps() -> VisibleApps {
         .unwrap_or_else(|_| default_visible_apps())
 }
 
+/// Seed a visible-app set outside the startup policy.
+///
+/// Visible apps are pinned to the supported harnesses by
+/// `services::visible_apps::apply_startup_policy()` on every launch, so
+/// production code never writes this directly; tests use it to seed a stale
+/// set from an older build and confirm it cannot resurrect a removed harness.
+#[cfg(test)]
 pub fn set_visible_apps(visible_apps: VisibleApps) -> Result<(), AppError> {
     visible_apps.validate()?;
 
@@ -1230,18 +1235,14 @@ pub fn set_visible_apps(visible_apps: VisibleApps) -> Result<(), AppError> {
     update_settings(settings)
 }
 
+/// Read the stored visible-app policy, including the mode tests overwrite to
+/// assert that startup pins it back to manual.
+#[cfg(test)]
 pub fn get_visible_apps_settings() -> VisibleAppsSettings {
     settings_store()
         .read()
         .map(|settings| settings.visible_apps_settings.clone())
         .unwrap_or_default()
-}
-
-pub fn set_visible_apps_mode(mode: VisibleAppsMode) -> Result<(), AppError> {
-    let mut settings = get_settings();
-    settings.visible_apps_settings.mode = mode;
-    settings.visible_apps_settings.auto_prompt_decided = true;
-    update_settings(settings)
 }
 
 pub fn get_effective_current_provider(
@@ -1428,12 +1429,62 @@ pub fn set_skip_claude_onboarding(enabled: bool) -> Result<(), AppError> {
 #[cfg(test)]
 mod tests {
     use super::{
-        get_pi_override_dir, get_preferred_editor, get_s3_sync_settings, get_settings,
-        get_webdav_sync_settings, set_preferred_editor, set_s3_sync_settings,
+        app_order, get_pi_override_dir, get_preferred_editor, get_s3_sync_settings, get_settings,
+        get_webdav_sync_settings, next_visible_app, set_preferred_editor, set_s3_sync_settings,
         set_webdav_sync_settings, update_settings, AppSettings, LocalMigrations, S3SyncSettings,
-        WebDavSyncSettings,
+        VisibleApps, WebDavSyncSettings,
     };
     use crate::test_support::TestEnvGuard;
+    use crate::AppType;
+
+    /// 标签页切换顺序必须是 `AppType::all()` 本身：这里多写一个已删 harness，
+    /// `next_visible_app` 就会把它当成可循环的标签。
+    #[test]
+    fn app_order_is_app_type_all() {
+        assert_eq!(
+            app_order().map(|app| app.as_str()),
+            ["claude", "codex", "hermes", "pi"]
+        );
+    }
+
+    /// 即使数据里还留着已删 harness 的可见性标记，标签循环也不能停在那里：
+    /// 这是"自动检测可用 harness 会把删掉的 harness 又显示出来"的直接回归测试。
+    #[test]
+    fn next_visible_app_cycles_only_supported_harnesses() {
+        let mut visible = VisibleApps::default();
+        for app in AppType::all() {
+            visible.set_enabled_for(&app, true);
+        }
+
+        for legacy_app in [AppType::Gemini, AppType::OpenCode, AppType::OpenClaw] {
+            let legacy = legacy_app.as_str();
+            assert!(
+                !visible.is_enabled_for(&legacy_app),
+                "{legacy} is removed from this build and must not be a visible tab"
+            );
+
+            let resolved = next_visible_app(&visible, &legacy_app, 1)
+                .expect("at least one supported harness is visible");
+            assert_ne!(resolved, legacy_app, "{legacy} must not stay selected");
+            assert!(
+                AppType::all().any(|app| app == resolved),
+                "{legacy} must resolve to a supported harness",
+            );
+        }
+
+        let mut current = app_order()
+            .first()
+            .expect("a supported harness exists")
+            .clone();
+        let mut walked = vec![current.as_str()];
+        for _ in 0..3 {
+            let next =
+                next_visible_app(&visible, &current, 1).expect("another visible harness exists");
+            walked.push(next.as_str());
+            current = next;
+        }
+        assert_eq!(walked, ["claude", "codex", "hermes", "pi"]);
+    }
 
     #[test]
     fn pi_override_dir_is_normalized_and_resolved() {

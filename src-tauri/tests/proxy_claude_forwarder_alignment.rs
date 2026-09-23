@@ -81,6 +81,11 @@ struct ProxyEnvGuard {
 
 impl ProxyEnvGuard {
     fn set(proxy_url: Option<&str>) -> Self {
+        #[cfg(windows)]
+        let proxy_keys = ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"];
+        #[cfg(windows)]
+        let bypass_keys = ["NO_PROXY"];
+        #[cfg(not(windows))]
         let proxy_keys = [
             "HTTP_PROXY",
             "http_proxy",
@@ -89,6 +94,7 @@ impl ProxyEnvGuard {
             "ALL_PROXY",
             "all_proxy",
         ];
+        #[cfg(not(windows))]
         let bypass_keys = ["NO_PROXY", "no_proxy"];
 
         let saved = proxy_keys
@@ -182,14 +188,29 @@ fn proxy_env_guard_drop_restores_original_proxy_env_values() {
         env::var("HTTP_PROXY").ok().as_deref(),
         Some("http://original-proxy.example:8080")
     );
-    assert_eq!(
-        env::var("NO_PROXY").ok().as_deref(),
-        Some("restore-upper.example")
-    );
-    assert_eq!(
-        env::var("no_proxy").ok().as_deref(),
-        Some("restore-lower.example")
-    );
+    #[cfg(windows)]
+    {
+        // Windows environment variable names are case-insensitive.
+        assert_eq!(
+            env::var("NO_PROXY").ok().as_deref(),
+            Some("restore-lower.example")
+        );
+        assert_eq!(
+            env::var("no_proxy").ok().as_deref(),
+            Some("restore-lower.example")
+        );
+    }
+    #[cfg(not(windows))]
+    {
+        assert_eq!(
+            env::var("NO_PROXY").ok().as_deref(),
+            Some("restore-upper.example")
+        );
+        assert_eq!(
+            env::var("no_proxy").ok().as_deref(),
+            Some("restore-lower.example")
+        );
+    }
 }
 
 async fn handle_anthropic_messages(

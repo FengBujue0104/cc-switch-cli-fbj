@@ -21,6 +21,119 @@ fn with_common_enabled(mut provider: Provider) -> Provider {
     provider
 }
 
+/// 已删 harness 的 live 文件快照：(路径, 原始字节 / 不存在)。
+///
+/// Gemini 不属于本构建，`should_sync_live(Gemini)` 恒为 `false`，所以任何
+/// `ProviderService` 操作都不该碰 `~/.gemini` 一个字节。上游那批原本断言"live 被写入
+/// / live 被清空"的 Gemini 用例，现在统一改成断言"操作成功、内存与库里的状态变了，
+/// 而 live 目录原地不动"——被删 harness 的 live 同步关掉是本 fork 的既定行为。
+fn removed_harness_live_snapshot() -> Vec<(std::path::PathBuf, Option<Vec<u8>>)> {
+    [
+        crate::gemini_config::get_gemini_env_path(),
+        crate::gemini_config::get_gemini_settings_path(),
+    ]
+    .map(|path| {
+        let bytes = std::fs::read(&path).ok();
+        (path, bytes)
+    })
+    .to_vec()
+}
+
+/// 三个已删 harness 的 live 目录快照：`(目录, [(相对路径, 原始字节)])`。
+///
+/// `removed_harness_live_snapshot` 只覆盖 Gemini 的两个文件；这里把 Gemini /
+/// OpenCode / OpenClaw 三个 live 目录整棵扫下来，于是"新增了一个文件"也会被发现——
+/// 后者正是 `prepare_live_snapshot` 的 OpenCode / OpenClaw 臂原先会做的事。
+fn removed_harness_dir_snapshots() -> Vec<(std::path::PathBuf, Vec<(String, Option<Vec<u8>>)>)> {
+    [
+        crate::gemini_config::get_gemini_dir(),
+        crate::opencode_config::get_opencode_dir(),
+        crate::openclaw_config::get_openclaw_dir(),
+    ]
+    .into_iter()
+    .map(|dir| {
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(entries) => entries
+                .filter_map(Result::ok)
+                .map(|entry| {
+                    let path = entry.path();
+                    let name = path
+                        .file_name()
+                        .map(|name| name.to_string_lossy().into_owned())
+                        .unwrap_or_default();
+                    let bytes = if path.is_file() {
+                        std::fs::read(&path).ok()
+                    } else {
+                        Some(Vec::new())
+                    };
+                    (name, bytes)
+                })
+                .collect::<Vec<_>>(),
+            Err(_) => Vec::new(),
+        };
+        (dir, entries)
+    })
+    .collect()
+}
+
+/// 目录内容逐项比对：既有的一个字节都不能改，也不能多出任何新文件。
+fn assert_removed_harness_dirs_unchanged(
+    before: &[(std::path::PathBuf, Vec<(String, Option<Vec<u8>>)>)],
+) {
+    for (dir, entries) in before {
+        let after = match std::fs::read_dir(dir) {
+            Ok(entries) => entries
+                .filter_map(Result::ok)
+                .map(|entry| {
+                    let path = entry.path();
+                    let name = path
+                        .file_name()
+                        .map(|name| name.to_string_lossy().into_owned())
+                        .unwrap_or_default();
+                    let bytes = if path.is_file() {
+                        std::fs::read(&path).ok()
+                    } else {
+                        Some(Vec::new())
+                    };
+                    (name, bytes)
+                })
+                .collect::<Vec<_>>(),
+            Err(_) => Vec::new(),
+        };
+        let mut before_names = entries.iter().map(|(name, _)| name).collect::<Vec<_>>();
+        let mut after_names = after.iter().map(|(name, _)| name).collect::<Vec<_>>();
+        before_names.sort();
+        after_names.sort();
+        assert_eq!(
+            before_names,
+            after_names,
+            "{} gained or lost entries: gemini/opencode/openclaw are not part of this build",
+            dir.display()
+        );
+        for (name, bytes) in entries {
+            let found = after.iter().find(|(after_name, _)| after_name == name);
+            assert_eq!(
+                found.map(|(_, bytes)| bytes.as_ref()),
+                Some(bytes.as_ref()),
+                "{} must stay byte-identical: removed harnesses keep their live config untouched",
+                dir.join(name).display()
+            );
+        }
+    }
+}
+
+/// 操作前后逐字节比对：一个字节都不能改，一行都不能增删。
+fn assert_removed_harness_live_unchanged(before: &[(std::path::PathBuf, Option<Vec<u8>>)]) {
+    for (path, bytes) in before {
+        assert_eq!(
+            std::fs::read(path).ok().as_ref(),
+            bytes.as_ref(),
+            "{} must stay byte-identical: gemini is not part of this build",
+            path.display()
+        );
+    }
+}
+
 fn claude_codex_oauth_provider(env: Value) -> Provider {
     let mut provider = Provider::with_id(
         "codex-oauth".to_string(),
@@ -623,6 +736,7 @@ fn validate_provider_settings_allows_blank_config_for_official_codex() {
 fn official_codex_live_write_strips_stale_unified_bucket_when_disabled() {
     let temp_home = TempDir::new().expect("create temp home");
     let _env = TestEnvGuard::isolated(temp_home.path());
+    crate::test_support::disable_unified_codex_session_history();
     std::fs::create_dir_all(crate::codex_config::get_codex_config_dir())
         .expect("create Codex config dir");
 
@@ -6597,8 +6711,8 @@ fn import_default_config_preserves_codex_model_catalog_projection() {
     std::fs::write(
         get_codex_config_path(),
         format!(
-            "model_catalog_json = \"{}\"\nmodel_context_window = 128000\nmodel_provider = \"default\"\nmodel = \"gpt-4\"\n\n[model_providers.default]\nbase_url = \"https://api.example/v1\"\n",
-            catalog_path.to_string_lossy()
+            "model_catalog_json = {}\nmodel_context_window = 128000\nmodel_provider = \"default\"\nmodel = \"gpt-4\"\n\n[model_providers.default]\nbase_url = \"https://api.example/v1\"\n",
+            toml::Value::String(catalog_path.to_string_lossy().into_owned())
         ),
     )
     .expect("write config.toml");
@@ -6764,7 +6878,7 @@ fn resolve_usage_script_credentials_does_not_require_provider_api_key_when_scrip
 
 #[test]
 #[serial]
-fn common_config_snippet_is_merged_into_gemini_env_on_write() {
+fn common_config_snippet_survives_in_db_for_removed_gemini_live_untouched() {
     let temp_home = TempDir::new().expect("create temp home");
     let _env = TestEnvGuard::isolated(temp_home.path());
     std::fs::create_dir_all(crate::gemini_config::get_gemini_dir())
@@ -6775,6 +6889,7 @@ fn common_config_snippet_is_merged_into_gemini_env_on_write() {
     config.common_config_snippets.gemini = Some(r#"{"CC_SWITCH_GEMINI_COMMON":"1"}"#.to_string());
 
     let state = state_from_config(config);
+    let before = removed_harness_live_snapshot();
 
     let provider = with_common_enabled(Provider::with_id(
         "p1".to_string(),
@@ -6789,17 +6904,21 @@ fn common_config_snippet_is_merged_into_gemini_env_on_write() {
 
     ProviderService::add(&state, AppType::Gemini, provider).expect("add should succeed");
 
-    let env = crate::gemini_config::read_gemini_env().expect("read gemini env");
+    // Gemini 已从本构建移除：common snippet 仍然落库（下面这条），但不再写进
+    // `~/.gemini/.env`。
+    let saved = state
+        .config
+        .read()
+        .expect("read config after add")
+        .common_config_snippets
+        .gemini
+        .clone();
     assert_eq!(
-        env.get("CC_SWITCH_GEMINI_COMMON").map(String::as_str),
-        Some("1"),
-        "common snippet env key should be present in ~/.gemini/.env"
+        saved.as_deref(),
+        Some(r#"{"CC_SWITCH_GEMINI_COMMON":"1"}"#),
+        "the stored common snippet must survive even though live sync is off"
     );
-    assert_eq!(
-        env.get("GEMINI_API_KEY").map(String::as_str),
-        Some("token"),
-        "provider env key should remain in ~/.gemini/.env"
-    );
+    assert_removed_harness_live_unchanged(&before);
 }
 
 #[test]
@@ -7044,7 +7163,7 @@ fn common_config_snippet_is_not_persisted_into_gemini_provider_snapshot_on_switc
 
 #[test]
 #[serial]
-fn switching_google_official_gemini_clears_stale_api_key_env() {
+fn switching_google_official_gemini_moves_the_pointer_and_keeps_stale_env_keys() {
     let temp_home = TempDir::new().expect("create temp home");
     let _env = TestEnvGuard::isolated(temp_home.path());
     std::fs::create_dir_all(crate::gemini_config::get_gemini_dir())
@@ -7104,45 +7223,37 @@ fn switching_google_official_gemini_clears_stale_api_key_env() {
     .expect("seed current gemini env");
 
     let state = state_from_config(config);
+    let before = removed_harness_live_snapshot();
     ProviderService::switch(&state, AppType::Gemini, "google-official")
         .expect("switch to Google official Gemini");
 
-    let live_env = crate::gemini_config::read_gemini_env().expect("read gemini env");
-    for key in [
-        "GEMINI_API_KEY",
-        "GOOGLE_GEMINI_BASE_URL",
-        "GEMINI_BASE_URL",
-        "GEMINI_MODEL",
-    ] {
-        assert!(
-            !live_env.contains_key(key),
-            "Google official Gemini should clear stale {key} from .env"
-        );
-    }
-    // Upstream parity: write_gemini_env_atomic is a FULL overwrite of .env with
-    // the provider's env_map (no merge with the prior file). A Google-official
-    // provider with an empty env therefore writes an empty .env, clearing even
-    // unrelated keys — matching upstream write_gemini_live.
-    assert!(
-        !live_env.contains_key("USER_DEFINED_ENV"),
-        "Gemini .env is a full overwrite with the provider env (upstream parity); prior unrelated keys are not preserved"
+    assert_eq!(
+        state
+            .config
+            .read()
+            .expect("read config after switch")
+            .get_manager(&AppType::Gemini)
+            .expect("gemini manager")
+            .current
+            .as_str(),
+        "google-official",
+        "the current-provider pointer still switches in memory"
     );
 
-    let settings: Value = read_json_file(&crate::gemini_config::get_gemini_settings_path())
-        .expect("read gemini settings");
-    assert_eq!(
-        settings
-            .pointer("/security/auth/selectedType")
-            .and_then(Value::as_str),
-        Some("oauth-personal")
-    );
+    // Upstream cleared the stale keys here by overwriting .env (and wrote the
+    // oauth selectedType into settings.json). Gemini is no longer shipped, so
+    // none of that happens: the stale keys the user left behind simply stay in a
+    // directory this build never reads or writes.
+    assert_removed_harness_live_unchanged(&before);
 }
 
 #[test]
 #[serial]
-fn switch_preserves_gemini_mcp_servers_after_clean_env_overwrite() {
+fn switch_of_removed_harness_only_moves_the_in_memory_pointer() {
     // Upstream parity: .env is a full overwrite, but settings.json is a shallow
     // merge that preserves user-managed mcpServers (and other unrelated keys).
+    // This build no longer ships Gemini, so neither write happens: the seeded
+    // mcpServers survive because nothing touches `~/.gemini` at all.
     let temp_home = TempDir::new().expect("create temp home");
     let _env = TestEnvGuard::isolated(temp_home.path());
     std::fs::create_dir_all(crate::gemini_config::get_gemini_dir())
@@ -7190,33 +7301,133 @@ fn switch_preserves_gemini_mcp_servers_after_clean_env_overwrite() {
     .expect("seed gemini settings.json with user mcpServers");
 
     let state = state_from_config(config);
+    let before = removed_harness_live_snapshot();
     ProviderService::switch(&state, AppType::Gemini, "p2").expect("switch to p2");
 
-    // .env is a full overwrite: the stale unrelated key is gone, token updated.
-    let live_env = crate::gemini_config::read_gemini_env().expect("read gemini env");
     assert_eq!(
-        live_env.get("GEMINI_API_KEY").map(String::as_str),
-        Some("token2"),
-    );
-    assert!(
-        !live_env.contains_key("USER_DEFINED_ENV"),
-        ".env should be fully overwritten for API-key Gemini providers"
+        state
+            .config
+            .read()
+            .expect("read config after switch")
+            .get_manager(&AppType::Gemini)
+            .expect("gemini manager")
+            .current
+            .as_str(),
+        "p2",
+        "the current-provider pointer still switches in memory"
     );
 
-    // settings.json is a shallow merge: mcpServers and unrelated keys survive.
-    let settings: Value = read_json_file(&crate::gemini_config::get_gemini_settings_path())
-        .expect("read gemini settings");
+    // settings.json and .env are both left alone: mcpServers, theme and the stale
+    // key all survive because Gemini live sync is disabled in this build.
+    assert_removed_harness_live_unchanged(&before);
+}
+
+/// 已删 harness 的 live 写入只有一个收口：`prepare_live_snapshot`。
+///
+/// `AppType::from_str` 仍然解析旧 id（否则旧数据库行加载即失败），所以调用方完全
+/// 可能把一个 legacy 值传进来。Gemini 那条路原先靠 `prepare_gemini_live_write` 里的
+/// 门槛挡住，而 OpenCode / OpenClaw 两个臂什么都没挡——直接拿旧 id 调
+/// `write_live_snapshot` 就会覆盖 `~/.config/opencode/opencode.json` 和
+/// `~/.openclaw/openclaw.json`。这条用例把三个 harness 逐个钉成 no-op。
+#[test]
+#[serial]
+fn write_live_snapshot_refuses_to_write_any_removed_harness_live_config() {
+    let temp_home = TempDir::new().expect("create temp home");
+    let _env = EnvGuard::isolated(temp_home.path());
+
+    let removed = [
+        (
+            AppType::Gemini,
+            crate::gemini_config::get_gemini_dir(),
+            crate::gemini_config::get_gemini_env_path(),
+            "GEMINI_API_KEY=PROXY_MANAGED\nGOOGLE_GEMINI_BASE_URL=http://127.0.0.1:15721\n",
+        ),
+        (
+            AppType::OpenCode,
+            crate::opencode_config::get_opencode_dir(),
+            crate::opencode_config::get_opencode_config_path(),
+            "{\"provider\":{\"legacy-opencode\":{\"name\":\"Legacy\"}}}\n",
+        ),
+        (
+            AppType::OpenClaw,
+            crate::openclaw_config::get_openclaw_dir(),
+            crate::openclaw_config::get_openclaw_config_path(),
+            "{\"agents\":\"legacy-openclaw\"}\n",
+        ),
+    ];
+
+    for (_, dir, live_file, seeded) in &removed {
+        std::fs::create_dir_all(dir).expect("create removed harness live dir");
+        std::fs::write(live_file, seeded.as_bytes()).expect("seed taken-over live config");
+    }
+
+    let before = removed_harness_dir_snapshots();
+
+    for (app_type, _, _, _) in &removed {
+        let provider = Provider::with_id(
+            "p-legacy".to_string(),
+            "Legacy Residual".to_string(),
+            json!({ "env": { "GEMINI_API_KEY": "legacy-gemini-key" } }),
+            None,
+        );
+        ProviderService::write_live_snapshot(app_type, &provider, None, true)
+            .expect("a removed harness is a no-op, not an error");
+    }
+
+    assert_removed_harness_dirs_unchanged(&before);
+}
+
+/// `sync_openclaw_to_live` 是 `pub`，唯一的生产调用方 `config openclaw set-dir` 自己
+/// 带了门槛。把门槛收进函数本身之后，任何新调用方（哪怕拿的是 legacy `AppType`）
+/// 都不可能再写 `~/.openclaw`。
+#[test]
+#[serial]
+fn sync_openclaw_to_live_refuses_to_write_removed_harness_live_config() {
+    let temp_home = TempDir::new().expect("create temp home");
+    let _env = EnvGuard::isolated(temp_home.path());
+
+    let openclaw_dir = crate::openclaw_config::get_openclaw_dir();
+    std::fs::create_dir_all(&openclaw_dir).expect("create ~/.openclaw");
+    let live_file = crate::openclaw_config::get_openclaw_config_path();
+    std::fs::write(&live_file, "{\"agents\":\"PROXY_MANAGED\"}\n")
+        .expect("seed taken-over openclaw live config");
+    let openclaw_json = std::fs::read_to_string(&live_file).expect("read seeded openclaw json");
+
+    let mut config = MultiAppConfig::default();
+    config.ensure_app(&AppType::OpenClaw);
+    {
+        let manager = config
+            .get_manager_mut(&AppType::OpenClaw)
+            .expect("openclaw manager");
+        manager.providers.insert(
+            "p-openclaw".to_string(),
+            Provider::with_id(
+                "p-openclaw".to_string(),
+                "OpenClaw Residual".to_string(),
+                json!({
+                    "baseUrl": "https://openclaw.example",
+                    "models": [{ "id": "openclaw-model" }]
+                }),
+                None,
+            ),
+        );
+    }
+    let state = state_from_config(config);
+
+    ProviderService::sync_openclaw_to_live(&state)
+        .expect("a removed harness is a no-op, not an error");
+
     assert_eq!(
-        settings
-            .pointer("/mcpServers/my-server/command")
-            .and_then(Value::as_str),
-        Some("node"),
-        "user mcpServers must be preserved through a clean env overwrite"
+        std::fs::read_to_string(&live_file).expect("openclaw.json must still exist"),
+        openclaw_json,
+        "a legacy-parsed AppType must not reopen the removed harness's live dir"
     );
     assert_eq!(
-        settings.pointer("/theme").and_then(Value::as_str),
-        Some("dark"),
-        "unrelated settings.json fields must be preserved"
+        std::fs::read_dir(&openclaw_dir)
+            .expect("read ~/.openclaw")
+            .count(),
+        1,
+        "sync must not create any other file under ~/.openclaw"
     );
 }
 
@@ -7276,6 +7487,7 @@ fn updating_common_snippet_removes_stale_fields_from_other_gemini_provider_snaps
 
     let state = state_from_config(config);
     state.save().expect("persist config snapshot to db");
+    let before = removed_harness_live_snapshot();
 
     ProviderService::set_common_config_snippet(
         &state,
@@ -7308,18 +7520,8 @@ fn updating_common_snippet_removes_stale_fields_from_other_gemini_provider_snaps
     );
     drop(cfg);
 
-    let live_env = crate::gemini_config::read_gemini_env().expect("read gemini env");
-    assert_eq!(
-        live_env
-            .get("CC_SWITCH_GEMINI_REPLACED")
-            .map(String::as_str),
-        Some("1"),
-        "current live Gemini env should reflect the new common snippet"
-    );
-    assert!(
-        !live_env.contains_key("CC_SWITCH_GEMINI_COMMON"),
-        "current live Gemini env should no longer carry the old common snippet"
-    );
+    // 旧 snapshot 里的 CC_SWITCH_GEMINI_COMMON 是在库里被剥掉的；live env 不动。
+    assert_removed_harness_live_unchanged(&before);
 }
 
 #[test]
@@ -7444,6 +7646,7 @@ fn replacing_gemini_common_snippet_tolerates_invalid_stored_snippet() {
 
     let state = state_from_config(config);
     state.save().expect("persist config snapshot to db");
+    let before = removed_harness_live_snapshot();
 
     ProviderService::set_common_config_snippet(
         &state,
@@ -7460,18 +7663,7 @@ fn replacing_gemini_common_snippet_tolerates_invalid_stored_snippet() {
     );
     drop(cfg);
 
-    let live_env = crate::gemini_config::read_gemini_env().expect("read gemini env");
-    assert_eq!(
-        live_env
-            .get("CC_SWITCH_GEMINI_REPLACED")
-            .map(String::as_str),
-        Some("1"),
-        "replacing should write the new common snippet into the live Gemini env"
-    );
-    assert!(
-        !live_env.contains_key("CC_SWITCH_GEMINI_COMMON"),
-        "replacing should rewrite live Gemini env from the provider snapshot even when the old snippet is invalid"
-    );
+    assert_removed_harness_live_unchanged(&before);
 }
 
 #[test]

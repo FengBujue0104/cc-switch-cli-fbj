@@ -239,13 +239,16 @@ impl McpAddFormState {
             fields.extend([McpAddField::Command, McpAddField::Args, McpAddField::Env]);
         }
 
-        fields.extend([
-            McpAddField::AppClaude,
-            McpAddField::AppCodex,
-            McpAddField::AppGemini,
-            McpAddField::AppOpenCode,
-            McpAddField::AppHermes,
-        ]);
+        // 只列本构建承接 MCP 的 harness：`McpAddFormState::fields()` 决定
+        // 表单里出现哪些开关，写死一份就是给已删 harness 留复活的口子。
+        fields.extend(
+            crate::services::McpService::supported_mcp_apps().map(|app| match app {
+                crate::app_config::AppType::Claude => McpAddField::AppClaude,
+                crate::app_config::AppType::Codex => McpAddField::AppCodex,
+                crate::app_config::AppType::Hermes => McpAddField::AppHermes,
+                other => unreachable!("unsupported MCP app in supported_mcp_apps(): {other:?}"),
+            }),
+        );
 
         fields
     }
@@ -262,8 +265,6 @@ impl McpAddFormState {
             | McpAddField::Headers
             | McpAddField::AppClaude
             | McpAddField::AppCodex
-            | McpAddField::AppGemini
-            | McpAddField::AppOpenCode
             | McpAddField::AppHermes => None,
         }
     }
@@ -280,8 +281,6 @@ impl McpAddFormState {
             | McpAddField::Headers
             | McpAddField::AppClaude
             | McpAddField::AppCodex
-            | McpAddField::AppGemini
-            | McpAddField::AppOpenCode
             | McpAddField::AppHermes => None,
         }
     }

@@ -525,7 +525,14 @@ fn init_refuses_v16_migration_while_an_external_process_holds_the_database() {
 #[serial_test::serial]
 fn init_rejects_unsafe_config_dir() {
     let _lock = crate::test_support::lock_test_home_and_settings();
-    let _guard = ConfigDirEnvGuard::set(Path::new("/tmp"));
+    #[cfg(unix)]
+    let unsafe_config_dir = PathBuf::from("/tmp");
+    #[cfg(windows)]
+    let unsafe_config_dir = PathBuf::from(format!(
+        r#"{}\\"#,
+        std::env::var("SystemDrive").unwrap_or_else(|_| "C:".to_string())
+    ));
+    let _guard = ConfigDirEnvGuard::set(&unsafe_config_dir);
 
     let err = match Database::init() {
         Ok(_) => panic!("unsafe config dir should fail init"),

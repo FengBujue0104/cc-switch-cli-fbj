@@ -705,12 +705,17 @@ fn legacy_linux_asset_selection_is_strict_for_supported_architectures() {
         ] {
             let candidates = release_asset_candidates_for_platform("linux", rust_arch, preference)
                 .expect("legacy Linux candidates should resolve");
-            let libc_suffix = if musl { "-musl" } else { "" };
+            let primary = format!(
+                "cc-switch-cli-linux-{asset_arch}{}.tar.gz",
+                if musl { "-musl" } else { "" }
+            );
+            let expected = if rust_arch == "x86_64" && musl {
+                vec![primary, format!("cc-switch-cli-linux-{asset_arch}.tar.gz")]
+            } else {
+                vec![primary]
+            };
             assert_eq!(
-                candidates,
-                vec![format!(
-                    "cc-switch-cli-linux-{asset_arch}{libc_suffix}.tar.gz"
-                )],
+                candidates, expected,
                 "unexpected legacy asset for {rust_arch}/{preference:?}"
             );
         }

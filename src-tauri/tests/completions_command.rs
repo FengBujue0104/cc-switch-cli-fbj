@@ -69,6 +69,7 @@ fn raw_generator_path_still_supports_non_automated_shells_without_startup_state(
 
 #[test]
 #[serial]
+#[cfg(unix)]
 fn bash_lifecycle_commands_work_end_to_end_without_startup_state() {
     let home = TempDir::new().expect("create temp home");
     let config_dir = TempDir::new().expect("create temp config");

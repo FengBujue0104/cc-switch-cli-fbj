@@ -95,8 +95,9 @@ fn run_app_doctor(app_type: &AppType) -> Result<(), AppError> {
     match app_type {
         AppType::Claude => check_claude_doctor(),
         AppType::Codex => check_codex_doctor(),
-        AppType::Gemini => check_gemini_doctor(),
-        AppType::OpenCode | AppType::Hermes | AppType::OpenClaw | AppType::Pi => {
+        // Gemini 已从本构建移除，但它仍可能从旧数据里解析出来；一并走通用分支，
+        // 不再专门去读 `~/.gemini` 的 live 文件。
+        AppType::Gemini | AppType::OpenCode | AppType::Hermes | AppType::OpenClaw | AppType::Pi => {
             println!(
                 "{}",
                 info(&format!(
@@ -158,29 +159,6 @@ fn check_codex_doctor() -> Result<(), AppError> {
         None => rows.push(warn_row(
             "Current provider",
             "no current Codex provider selected".to_string(),
-        )),
-    }
-
-    print_doctor_rows(rows);
-    Ok(())
-}
-
-fn check_gemini_doctor() -> Result<(), AppError> {
-    let db = Database::open_readonly_current_schema()?;
-    let current = crate::settings::get_effective_current_provider(&db, &AppType::Gemini)?;
-    let env_path = crate::gemini_config::get_gemini_env_path();
-    let settings_path = crate::gemini_config::get_gemini_settings_path();
-
-    let mut rows = vec![
-        check_file_exists("Gemini .env", &env_path),
-        check_file_exists("Gemini settings.json", &settings_path),
-    ];
-
-    match current {
-        Some(provider_id) => rows.push(ok_row("Current provider", provider_id)),
-        None => rows.push(warn_row(
-            "Current provider",
-            "no current Gemini provider selected".to_string(),
         )),
     }
 

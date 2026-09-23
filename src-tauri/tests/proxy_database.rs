@@ -146,17 +146,14 @@ async fn clear_auto_failover_for_supported_apps_disables_failover_flags() -> Res
     let db = Database::memory()?;
     save_queue_provider(&db, "claude", "claude-p1")?;
     save_queue_provider(&db, "codex", "codex-p1")?;
-    save_queue_provider(&db, "gemini", "gemini-p1")?;
     db.set_proxy_flags_sync("claude", true, true)?;
     db.set_proxy_flags_sync("codex", true, true)?;
-    db.set_proxy_flags_sync("gemini", true, true)?;
 
     let cleared = db.clear_auto_failover_for_supported_apps().await?;
 
-    assert_eq!(cleared, 3);
+    assert_eq!(cleared, 2);
     assert_eq!(db.get_proxy_flags_sync("claude"), (true, false));
     assert_eq!(db.get_proxy_flags_sync("codex"), (true, false));
-    assert_eq!(db.get_proxy_flags_sync("gemini"), (true, false));
     Ok(())
 }
 
@@ -165,10 +162,8 @@ async fn disabling_global_proxy_config_clears_supported_failover_rows() -> Resul
     let db = Database::memory()?;
     save_queue_provider(&db, "claude", "claude-p1")?;
     save_queue_provider(&db, "codex", "codex-p1")?;
-    save_queue_provider(&db, "gemini", "gemini-p1")?;
     db.set_proxy_flags_sync("claude", true, true)?;
     db.set_proxy_flags_sync("codex", true, true)?;
-    db.set_proxy_flags_sync("gemini", true, true)?;
 
     let mut config = db.get_global_proxy_config().await?;
     config.proxy_enabled = false;
@@ -176,7 +171,6 @@ async fn disabling_global_proxy_config_clears_supported_failover_rows() -> Resul
 
     assert_eq!(db.get_proxy_flags_sync("claude"), (true, false));
     assert_eq!(db.get_proxy_flags_sync("codex"), (true, false));
-    assert_eq!(db.get_proxy_flags_sync("gemini"), (true, false));
     Ok(())
 }
 

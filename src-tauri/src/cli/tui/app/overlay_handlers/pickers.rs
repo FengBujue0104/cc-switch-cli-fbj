@@ -148,12 +148,6 @@ impl App {
         key: KeyEvent,
         data: &UiData,
     ) -> Option<Action> {
-        if let Some(action) = self.handle_sync_method_picker_key(key, data) {
-            return Some(action);
-        }
-        if let Some(action) = self.handle_storage_location_picker_key(key, data) {
-            return Some(action);
-        }
         if let Some(action) = self.handle_claude_api_format_picker_key(key, data) {
             return Some(action);
         }
@@ -206,9 +200,6 @@ impl App {
             return Some(action);
         }
         if let Some(action) = self.handle_mcp_apps_picker_key(key, data) {
-            return Some(action);
-        }
-        if let Some(action) = self.handle_visible_apps_picker_key(key) {
             return Some(action);
         }
         if let Some(action) = self.handle_skills_apps_picker_key(key, data) {
@@ -323,84 +314,6 @@ impl App {
             }
             _ => Action::None,
         }
-    }
-
-    fn handle_sync_method_picker_key(&mut self, key: KeyEvent, data: &UiData) -> Option<Action> {
-        let Overlay::SkillsSyncMethodPicker { selected } = &mut self.overlay else {
-            return None;
-        };
-
-        Some(match key.code {
-            KeyCode::Esc => {
-                self.close_overlay();
-                Action::None
-            }
-            KeyCode::Up => {
-                *selected = selected.saturating_sub(1);
-                Action::None
-            }
-            KeyCode::Down => {
-                *selected = (*selected + 1).min(1);
-                Action::None
-            }
-            KeyCode::Enter => {
-                let method = sync_method_for_picker_index(*selected);
-                let unchanged = method == data.skills.sync_method;
-                self.overlay = Overlay::None;
-                if unchanged {
-                    Action::None
-                } else {
-                    Action::SkillsSetSyncMethod { method }
-                }
-            }
-            _ => Action::None,
-        })
-    }
-
-    fn handle_storage_location_picker_key(
-        &mut self,
-        key: KeyEvent,
-        data: &UiData,
-    ) -> Option<Action> {
-        let Overlay::SkillsStorageLocationPicker { selected } = &mut self.overlay else {
-            return None;
-        };
-
-        Some(match key.code {
-            KeyCode::Esc => {
-                self.close_overlay();
-                Action::None
-            }
-            KeyCode::Up => {
-                *selected = selected.saturating_sub(1);
-                Action::None
-            }
-            KeyCode::Down => {
-                *selected = (*selected + 1).min(1);
-                Action::None
-            }
-            KeyCode::Enter => {
-                let location = storage_location_for_picker_index(*selected);
-                if location == crate::settings::get_skill_storage_location() {
-                    self.overlay = Overlay::None;
-                    Action::SkillsSetStorageLocation { location }
-                } else if data.skills.installed.is_empty() {
-                    self.overlay = Overlay::None;
-                    Action::SkillsSetStorageLocation { location }
-                } else {
-                    self.overlay = Overlay::Confirm(ConfirmOverlay {
-                        title: texts::tui_confirm_title().to_string(),
-                        message: texts::tui_confirm_skills_storage_location(
-                            location,
-                            data.skills.installed.len(),
-                        ),
-                        action: ConfirmAction::SkillsMigrateStorage { location },
-                    });
-                    Action::None
-                }
-            }
-            _ => Action::None,
-        })
     }
 
     fn handle_claude_api_format_picker_key(
@@ -1546,11 +1459,11 @@ impl App {
                 Action::None
             }
             KeyCode::Down => {
-                *selected = (*selected + 1).min(4);
+                *selected = (*selected + 1).min(picker_last_index(&mcp_picker_apps()));
                 Action::None
             }
             KeyCode::Char(' ') => {
-                let app_type = app_type_for_picker_index(*selected);
+                let app_type = picker_app_for_index(&mcp_picker_apps(), *selected);
                 let enabled = apps.is_enabled_for(&app_type);
                 apps.set_enabled_for(&app_type, !enabled);
                 Action::None
@@ -1612,69 +1525,6 @@ impl App {
         })
     }
 
-    fn handle_visible_apps_picker_key(&mut self, key: KeyEvent) -> Option<Action> {
-        let Overlay::VisibleAppsPicker { selected, apps } = &mut self.overlay else {
-            return None;
-        };
-
-        Some(match key.code {
-            KeyCode::Esc => {
-                self.overlay = Overlay::None;
-                Action::None
-            }
-            KeyCode::Up => {
-                *selected = selected.saturating_sub(1);
-                Action::None
-            }
-            KeyCode::Down => {
-                *selected = (*selected + 1).min(6);
-                Action::None
-            }
-            KeyCode::Char(' ') => {
-                let app_type = app_type_for_picker_index(*selected);
-                let mut next = apps.clone();
-                let enabled = next.is_enabled_for(&app_type);
-                next.set_enabled_for(&app_type, !enabled);
-
-                if crate::settings::get_visible_apps_settings().mode
-                    == crate::settings::VisibleAppsMode::Auto
-                {
-                    self.overlay = Overlay::Confirm(ConfirmOverlay {
-                        title: texts::tui_visible_apps_manual_switch_prompt_title().to_string(),
-                        message: texts::tui_visible_apps_manual_switch_prompt_message().to_string(),
-                        action: ConfirmAction::VisibleAppsSwitchToManual {
-                            apps: next,
-                            selected: *selected,
-                        },
-                    });
-                    return Some(Action::None);
-                }
-
-                apps.set_enabled_for(&app_type, !enabled);
-                Action::None
-            }
-            KeyCode::Enter => {
-                let next = apps.clone();
-                if next.ordered_enabled().is_empty() {
-                    self.push_toast(
-                        texts::tui_toast_visible_apps_zero_selection_warning(),
-                        ToastKind::Warning,
-                    );
-                    return Some(Action::None);
-                }
-
-                let unchanged = crate::settings::get_visible_apps() == next;
-                self.overlay = Overlay::None;
-                if unchanged {
-                    Action::None
-                } else {
-                    Action::SetVisibleApps { apps: next }
-                }
-            }
-            _ => Action::None,
-        })
-    }
-
     fn handle_skills_apps_picker_key(&mut self, key: KeyEvent, data: &UiData) -> Option<Action> {
         let Overlay::SkillsAppsPicker {
             directory,
@@ -1696,11 +1546,11 @@ impl App {
                 Action::None
             }
             KeyCode::Down => {
-                *selected = (*selected + 1).min(5);
+                *selected = (*selected + 1).min(picker_last_index(&skills_picker_apps()));
                 Action::None
             }
             KeyCode::Char(' ') => {
-                let app_type = skill_app_type_for_picker_index(*selected);
+                let app_type = picker_app_for_index(&skills_picker_apps(), *selected);
                 let enabled = apps.is_enabled_for(&app_type);
                 apps.set_enabled_for(&app_type, !enabled);
                 Action::None

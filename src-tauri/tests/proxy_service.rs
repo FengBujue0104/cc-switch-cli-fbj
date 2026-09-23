@@ -1360,6 +1360,9 @@ async fn proxy_service_status_prefers_live_status_from_external_session() {
 
     let server = tokio::spawn(async move {
         let (mut socket, _) = listener.accept().await.expect("accept status request");
+        use tokio::io::AsyncReadExt;
+        let mut request = [0u8; 4096];
+        let _ = socket.read(&mut request).await;
         let response = format!(
             "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
             expected_status.to_string().len(),
@@ -1436,6 +1439,9 @@ async fn proxy_service_rejects_external_status_with_mismatched_session_token() {
 
     let server = tokio::spawn(async move {
         let (mut socket, _) = listener.accept().await.expect("accept status request");
+        use tokio::io::AsyncReadExt;
+        let mut request = [0u8; 4096];
+        let _ = socket.read(&mut request).await;
         let response = format!(
             "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
             mismatched_status.to_string().len(),
@@ -1508,6 +1514,9 @@ async fn proxy_service_get_status_clears_only_stale_worker_from_multi_app_sessio
 
     let server = tokio::spawn(async move {
         let (mut socket, _) = listener.accept().await.expect("accept status request");
+        use tokio::io::AsyncReadExt;
+        let mut request = [0u8; 4096];
+        let _ = socket.read(&mut request).await;
         let response = format!(
             "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
             healthy_status.to_string().len(),
@@ -1613,6 +1622,9 @@ async fn proxy_service_does_not_kill_process_when_status_token_mismatches() {
 
     let server = tokio::spawn(async move {
         let (mut socket, _) = listener.accept().await.expect("accept status request");
+        use tokio::io::AsyncReadExt;
+        let mut request = [0u8; 4096];
+        let _ = socket.read(&mut request).await;
         let response = format!(
             "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
             mismatched_status.to_string().len(),

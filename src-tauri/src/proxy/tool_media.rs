@@ -182,6 +182,11 @@ pub(crate) fn whole_string_image_data_url(value: &str) -> Option<Value> {
 
 /// Read-only media detection using the same shape classifier and recursive
 /// boundaries as [`strip_media_from_tool_value`].
+///
+/// 只被下列单元测试使用：它复用了 `strip_media_from_tool_value` 的形状分类器，
+/// 是后者唯一被单独测到"什么都不替换"路径的入口，删掉会让这半边分类丢失覆盖。
+/// 生产代码不引用它，因此限定在 `cfg(test)`，避免在库构建里变成死代码。
+#[cfg(test)]
 pub(crate) fn tool_output_contains_media(value: &Value, scope: ToolMediaScope) -> bool {
     tool_output_contains_media_at_depth(value, scope, 0)
 }
@@ -267,6 +272,7 @@ pub(crate) fn clamp_base64ish_strings(value: &mut Value) {
     }
 }
 
+#[cfg(test)]
 fn tool_output_contains_media_at_depth(value: &Value, scope: ToolMediaScope, depth: usize) -> bool {
     if depth > MAX_MEDIA_TRAVERSAL_DEPTH {
         return false;

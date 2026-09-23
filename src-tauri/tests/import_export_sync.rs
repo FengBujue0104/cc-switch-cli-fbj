@@ -4,7 +4,7 @@ use std::{fs, path::Path};
 
 use cc_switch_lib::{
     get_claude_settings_path, read_json_file, AppError, AppType, ConfigService, Database,
-    MultiAppConfig, Provider, ProviderMeta, ProviderService,
+    MultiAppConfig, Provider, ProviderService,
 };
 
 #[path = "support.rs"]
@@ -1289,118 +1289,49 @@ fn import_config_from_path_missing_file_produces_io_error() {
 }
 
 #[test]
-fn sync_gemini_packycode_sets_security_selected_type() {
+fn sync_current_providers_skips_removed_harness_live_directories() {
     let _guard = lock_test_mutex();
     reset_test_fs();
     let home = ensure_test_home();
 
+    // 库里留着已删 harness 的 current（历史行、导入/还原的配置）时，同步不能往它们
+    // 的 live 目录落任何文件。以前 `sync_current_providers_to_live` 写死六个 harness，
+    // 这里会命中 `sync_gemini_live`，真的写出 `~/.gemini/.env` 和
+    // `~/.gemini/settings.json`。
     let mut config = MultiAppConfig::default();
-    {
+    for (app_type, id, name) in [
+        (AppType::Gemini, "packy-1", "PackyCode"),
+        (AppType::OpenCode, "opencode-1", "OpenCode"),
+        (AppType::OpenClaw, "openclaw-1", "OpenClaw"),
+    ] {
         let manager = config
-            .get_manager_mut(&AppType::Gemini)
-            .expect("gemini manager");
-        manager.current = "packy-1".to_string();
+            .get_manager_mut(&app_type)
+            .expect("manager for removed harness");
+        manager.current = id.to_string();
         manager.providers.insert(
-            "packy-1".to_string(),
+            id.to_string(),
             Provider::with_id(
-                "packy-1".to_string(),
-                "PackyCode".to_string(),
-                json!({
-                    "env": {
-                        "GEMINI_API_KEY": "pk-key",
-                        "GOOGLE_GEMINI_BASE_URL": "https://api-slb.packyapi.com"
-                    }
-                }),
-                Some("https://www.packyapi.com".to_string()),
+                id.to_string(),
+                name.to_string(),
+                json!({"env": {"GEMINI_API_KEY": "pk-key"}}),
+                None,
             ),
         );
     }
 
-    ConfigService::sync_current_providers_to_live(&mut config)
-        .expect("syncing gemini live should succeed");
+    ConfigService::sync_current_providers_to_live(&mut config).expect("syncing should succeed");
 
-    let settings_path = home.join(".cc-switch").join("settings.json");
-    assert!(
-        settings_path.exists(),
-        "settings.json should exist at {}",
-        settings_path.display()
-    );
-
-    let raw = std::fs::read_to_string(&settings_path).expect("read settings.json");
-    let value: serde_json::Value = serde_json::from_str(&raw).expect("parse settings.json");
-    assert_eq!(
-        value
-            .pointer("/security/auth/selectedType")
-            .and_then(|v| v.as_str()),
-        Some("gemini-api-key"),
-        "syncing PackyCode Gemini should enforce security.auth.selectedType"
-    );
-}
-
-#[test]
-fn sync_gemini_google_official_sets_oauth_security() {
-    let _guard = lock_test_mutex();
-    reset_test_fs();
-    let home = ensure_test_home();
-
-    let mut config = MultiAppConfig::default();
-    {
-        let manager = config
-            .get_manager_mut(&AppType::Gemini)
-            .expect("gemini manager");
-        manager.current = "google-official".to_string();
-        let mut provider = Provider::with_id(
-            "google-official".to_string(),
-            "Google".to_string(),
-            json!({
-                "env": {}
-            }),
-            Some("https://ai.google.dev".to_string()),
+    for dir in [
+        home.join(".gemini"),
+        home.join(".config").join("opencode"),
+        home.join(".openclaw"),
+    ] {
+        assert!(
+            !dir.exists(),
+            "removed harness live dir must not be created: {}",
+            dir.display()
         );
-        provider.meta = Some(ProviderMeta {
-            partner_promotion_key: Some("google-official".to_string()),
-            ..ProviderMeta::default()
-        });
-        manager
-            .providers
-            .insert("google-official".to_string(), provider);
     }
-
-    ConfigService::sync_current_providers_to_live(&mut config)
-        .expect("syncing google official gemini should succeed");
-
-    let cc_settings = home.join(".cc-switch").join("settings.json");
-    assert!(
-        cc_settings.exists(),
-        "app settings should exist at {}",
-        cc_settings.display()
-    );
-    let cc_raw = std::fs::read_to_string(&cc_settings).expect("read .cc-switch settings");
-    let cc_value: serde_json::Value = serde_json::from_str(&cc_raw).expect("parse app settings");
-    assert_eq!(
-        cc_value
-            .pointer("/security/auth/selectedType")
-            .and_then(|v| v.as_str()),
-        Some("oauth-personal"),
-        "syncing Google official should set oauth-personal in app settings"
-    );
-
-    let gemini_settings = home.join(".gemini").join("settings.json");
-    assert!(
-        gemini_settings.exists(),
-        "Gemini settings should exist at {}",
-        gemini_settings.display()
-    );
-    let gemini_raw = std::fs::read_to_string(&gemini_settings).expect("read gemini settings");
-    let gemini_value: serde_json::Value =
-        serde_json::from_str(&gemini_raw).expect("parse gemini settings json");
-    assert_eq!(
-        gemini_value
-            .pointer("/security/auth/selectedType")
-            .and_then(|v| v.as_str()),
-        Some("oauth-personal"),
-        "Gemini settings should also record oauth-personal"
-    );
 }
 
 #[test]

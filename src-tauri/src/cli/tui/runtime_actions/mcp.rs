@@ -1,4 +1,4 @@
-use crate::app_config::{AppType, McpApps};
+use crate::app_config::McpApps;
 use crate::cli::i18n::texts;
 use crate::error::AppError;
 use crate::services::McpService;
@@ -52,13 +52,11 @@ pub(super) fn set_apps(
     let mut skipped: Vec<&str> = Vec::new();
     let mut changed = false;
 
-    for app_type in [
-        AppType::Claude,
-        AppType::Codex,
-        AppType::Gemini,
-        AppType::OpenCode,
-        AppType::Hermes,
-    ] {
+    // 名单跟着 `McpService::supported_mcp_apps()` 走，不手抄：已删 harness 的
+    // `apps` 开关可能还留在旧行里，一旦这里逐个比较就把 `toggle_app` 引到
+    // `~/.gemini` / `~/.config/opencode` 上去了（`toggle_app` 自己不做 harness
+    // 过滤，过滤只发生在各个 live 适配器里）。
+    for app_type in crate::services::McpService::supported_mcp_apps() {
         let next_enabled = apps.is_enabled_for(&app_type);
         if before.is_enabled_for(&app_type) == next_enabled {
             continue;

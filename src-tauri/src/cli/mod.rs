@@ -114,6 +114,7 @@ pub(crate) fn generate_completions_to<W: Write>(shell: Shell, writer: &mut W) {
 mod tests {
     use clap::{CommandFactory, Parser};
     use std::ffi::OsString;
+    use std::str::FromStr as _;
 
     use super::{Cli, Commands};
     use crate::app_config::AppType;
@@ -203,6 +204,35 @@ mod tests {
         match cli.command {
             Some(Commands::Use { id }) => assert_eq!(id, "demo"),
             _ => panic!("expected use shortcut command"),
+        }
+    }
+
+    /// 已删 harness 不能通过 `--app` 进入任何命令路径。
+    ///
+    /// `AppType::from_str` 仍然解析旧 id（否则旧数据库/旧配置文件加载即失败），
+    /// 所以这一层必须是 clap 的 `value(skip)`：入口先拒绝，库内保留兼容解析。
+    /// 少了这道闸，"自动检测可用 harness" 就能借着 `--app gemini` 之类的入口
+    /// 把已删 harness 带回来。
+    #[test]
+    fn app_global_flag_rejects_removed_harnesses() {
+        for removed in ["gemini", "opencode", "openclaw"] {
+            let parsed = Cli::try_parse_from(["cc-switch", "--app", removed, "use", "demo"]);
+            let err = parsed.err().unwrap_or_else(|| {
+                panic!("--app {removed} must be rejected by the clap value parser")
+            });
+            let rendered = err.to_string();
+            assert!(
+                rendered.contains("invalid value") || rendered.contains("possible value"),
+                "--app {removed} should fail as an invalid enum value, got: {rendered}"
+            );
+        }
+    }
+
+    #[test]
+    fn app_global_flag_accepts_the_four_supported_harnesses() {
+        for supported in ["claude", "codex", "hermes", "pi"] {
+            let cli = Cli::parse_from(["cc-switch", "--app", supported, "use", "demo"]);
+            assert_eq!(cli.app, Some(AppType::from_str(supported).unwrap()));
         }
     }
 
@@ -335,20 +365,6 @@ mod tests {
         };
 
         assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
-    }
-
-    #[test]
-    fn parses_settings_visible_apps_enable_subcommand() {
-        let cli = Cli::parse_from(["cc-switch", "settings", "visible-apps", "enable", "gemini"]);
-
-        match cli.command {
-            Some(Commands::Settings(super::commands::settings::SettingsCommand::VisibleApps(
-                super::commands::settings::VisibleAppsCommand::Enable { app },
-            ))) => {
-                assert_eq!(app, super::AppType::Gemini);
-            }
-            _ => panic!("expected settings visible-apps enable command"),
-        }
     }
 
     #[test]
@@ -1106,18 +1122,18 @@ mod tests {
         let cli = Cli::parse_from([
             "cc-switch",
             "--app",
-            "gemini",
+            "claude",
             "provider",
             "fetch-models",
             "--base-url",
-            "https://gemini.example.com",
+            "https://api.example.com",
             "--api-key",
-            "sk-gemini",
+            "sk-test",
             "--auth",
-            "google-api-key",
+            "anthropic",
         ]);
 
-        assert_eq!(cli.app, Some(AppType::Gemini));
+        assert_eq!(cli.app, Some(AppType::Claude));
         match cli.command {
             Some(Commands::Provider(super::commands::provider::ProviderCommand::FetchModels {
                 id,
@@ -1126,11 +1142,11 @@ mod tests {
                 auth,
             })) => {
                 assert_eq!(id, None);
-                assert_eq!(base_url.as_deref(), Some("https://gemini.example.com"));
-                assert_eq!(api_key.as_deref(), Some("sk-gemini"));
+                assert_eq!(base_url.as_deref(), Some("https://api.example.com"));
+                assert_eq!(api_key.as_deref(), Some("sk-test"));
                 assert_eq!(
                     auth,
-                    Some(super::commands::provider::ModelFetchAuthArg::GoogleApiKey)
+                    Some(super::commands::provider::ModelFetchAuthArg::Anthropic)
                 );
             }
             _ => panic!("expected provider fetch-models command"),
@@ -1732,8 +1748,7 @@ mod tests {
         assert!(help.contains("Compatibility:"));
         assert!(help.contains("--json <SNIPPET>"));
         assert!(help.contains("Legacy alias for --snippet <SNIPPET>"));
-        assert!(help.contains("Claude/Gemini"));
-        assert!(help.contains("OpenCode"));
+        assert!(help.contains("Claude/Hermes"));
         assert!(help.contains("Codex"));
         assert!(!help.contains("Apply to current provider immediately"));
         assert!(help.contains("live config"));

@@ -692,3 +692,16 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod platform_support_tests {
+    use super::ensure_temp_launch_supported;
+
+    #[test]
+    fn temp_launch_support_matches_platform() {
+        #[cfg(unix)]
+        assert!(ensure_temp_launch_supported().is_ok());
+        #[cfg(not(unix))]
+        assert!(ensure_temp_launch_supported().is_err());
+    }
+}

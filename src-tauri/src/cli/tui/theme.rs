@@ -94,18 +94,6 @@ pub struct Theme {
     /// Foreground for text sitting on an accent background.
     pub on_accent: Color,
     pub no_color: bool,
-    color_mode: ColorMode,
-}
-
-impl Theme {
-    /// Quantize an arbitrary RGB triple through the active color mode.
-    ///
-    /// Widgets that carry their own ramp (the usage chart series palette)
-    /// route through this so they degrade the same way the palette fields do
-    /// instead of hard-coding truecolor.
-    pub fn shade(&self, rgb: (u8, u8, u8)) -> Color {
-        terminal_color(self.color_mode, rgb)
-    }
 }
 
 pub fn no_color() -> bool {
@@ -347,7 +335,6 @@ pub fn theme_for_mode(app: &AppType, mode: ThemeMode) -> Theme {
             if light { (255, 255, 255) } else { (10, 10, 10) },
         ),
         no_color,
-        color_mode,
     }
 }
 
@@ -381,7 +368,11 @@ mod tests {
 
     #[test]
     fn light_and_dark_palettes_differ() {
-        let _guard = env_lock().lock().unwrap();
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _no_color = EnvGuard::remove("NO_COLOR");
+        let _color_mode = EnvGuard::remove(COLOR_MODE_ENV);
         let dark = theme_for_mode(&AppType::Claude, ThemeMode::Dark);
         let light = theme_for_mode(&AppType::Claude, ThemeMode::Light);
         assert_ne!(dark.accent, light.accent);
@@ -420,7 +411,9 @@ mod tests {
 
     #[test]
     fn opencode_theme_uses_distinct_accent_from_codex() {
-        let _lock = env_lock().lock().expect("env lock poisoned");
+        let _lock = env_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let _no_color = EnvGuard::remove("NO_COLOR");
         let _color_mode = EnvGuard::remove(COLOR_MODE_ENV);
         let _colorterm = EnvGuard::remove("COLORTERM");
@@ -434,7 +427,9 @@ mod tests {
 
     #[test]
     fn openclaw_theme_uses_distinct_upstream_aligned_accent() {
-        let _lock = env_lock().lock().expect("env lock poisoned");
+        let _lock = env_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let _no_color = EnvGuard::remove("NO_COLOR");
         let _color_mode = EnvGuard::remove(COLOR_MODE_ENV);
         let _colorterm = EnvGuard::set("COLORTERM", "truecolor");
@@ -451,7 +446,9 @@ mod tests {
 
     #[test]
     fn theme_keeps_rgb_colors_when_truecolor_is_available() {
-        let _lock = env_lock().lock().expect("env lock poisoned");
+        let _lock = env_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let _no_color = EnvGuard::remove("NO_COLOR");
         let _color_mode = EnvGuard::remove("CC_SWITCH_COLOR_MODE");
         let _colorterm = EnvGuard::set("COLORTERM", "truecolor");
@@ -467,7 +464,9 @@ mod tests {
 
     #[test]
     fn theme_defaults_to_rgb_when_terminal_capability_is_unknown() {
-        let _lock = env_lock().lock().expect("env lock poisoned");
+        let _lock = env_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let _no_color = EnvGuard::remove("NO_COLOR");
         let _color_mode = EnvGuard::remove("CC_SWITCH_COLOR_MODE");
         let _colorterm = EnvGuard::remove("COLORTERM");
@@ -484,7 +483,9 @@ mod tests {
 
     #[test]
     fn theme_keeps_truecolor_when_term_advertises_xterm_256color_without_negative_signals() {
-        let _lock = env_lock().lock().expect("env lock poisoned");
+        let _lock = env_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let _no_color = EnvGuard::remove("NO_COLOR");
         let _color_mode = EnvGuard::remove("CC_SWITCH_COLOR_MODE");
         let _colorterm = EnvGuard::remove("COLORTERM");
@@ -501,7 +502,9 @@ mod tests {
 
     #[test]
     fn theme_keeps_truecolor_for_termius_without_explicit_truecolor_signal() {
-        let _lock = env_lock().lock().expect("env lock poisoned");
+        let _lock = env_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let _no_color = EnvGuard::remove("NO_COLOR");
         let _color_mode = EnvGuard::remove("CC_SWITCH_COLOR_MODE");
         let _colorterm = EnvGuard::remove("COLORTERM");
@@ -518,7 +521,9 @@ mod tests {
 
     #[test]
     fn theme_keeps_truecolor_when_term_advertises_tmux_256color_without_negative_signals() {
-        let _lock = env_lock().lock().expect("env lock poisoned");
+        let _lock = env_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let _no_color = EnvGuard::remove("NO_COLOR");
         let _color_mode = EnvGuard::remove("CC_SWITCH_COLOR_MODE");
         let _colorterm = EnvGuard::remove("COLORTERM");
@@ -535,7 +540,9 @@ mod tests {
 
     #[test]
     fn theme_uses_ansi256_for_plain_xterm_over_ssh_without_truecolor_signal() {
-        let _lock = env_lock().lock().expect("env lock poisoned");
+        let _lock = env_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let _no_color = EnvGuard::remove("NO_COLOR");
         let _color_mode = EnvGuard::remove("CC_SWITCH_COLOR_MODE");
         let _colorterm = EnvGuard::remove("COLORTERM");
@@ -553,7 +560,9 @@ mod tests {
 
     #[test]
     fn theme_uses_ansi256_for_plain_xterm_without_truecolor_signal() {
-        let _lock = env_lock().lock().expect("env lock poisoned");
+        let _lock = env_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let _no_color = EnvGuard::remove("NO_COLOR");
         let _color_mode = EnvGuard::remove("CC_SWITCH_COLOR_MODE");
         let _colorterm = EnvGuard::remove("COLORTERM");
@@ -571,7 +580,9 @@ mod tests {
 
     #[test]
     fn explicit_truecolor_override_beats_plain_xterm_auto_fallback() {
-        let _lock = env_lock().lock().expect("env lock poisoned");
+        let _lock = env_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let _no_color = EnvGuard::remove("NO_COLOR");
         let _color_mode = EnvGuard::set("CC_SWITCH_COLOR_MODE", "truecolor");
         let _colorterm = EnvGuard::remove("COLORTERM");
@@ -589,7 +600,9 @@ mod tests {
 
     #[test]
     fn theme_keeps_truecolor_for_plain_xterm_over_ssh_with_explicit_truecolor_signal() {
-        let _lock = env_lock().lock().expect("env lock poisoned");
+        let _lock = env_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let _no_color = EnvGuard::remove("NO_COLOR");
         let _color_mode = EnvGuard::remove("CC_SWITCH_COLOR_MODE");
         let _colorterm = EnvGuard::set("COLORTERM", "truecolor");
@@ -607,7 +620,9 @@ mod tests {
 
     #[test]
     fn theme_keeps_truecolor_for_term_direct_over_ssh() {
-        let _lock = env_lock().lock().expect("env lock poisoned");
+        let _lock = env_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let _no_color = EnvGuard::remove("NO_COLOR");
         let _color_mode = EnvGuard::remove("CC_SWITCH_COLOR_MODE");
         let _colorterm = EnvGuard::remove("COLORTERM");
@@ -625,7 +640,9 @@ mod tests {
 
     #[test]
     fn theme_uses_ansi256_when_explicitly_requested() {
-        let _lock = env_lock().lock().expect("env lock poisoned");
+        let _lock = env_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let _no_color = EnvGuard::remove("NO_COLOR");
         let _color_mode = EnvGuard::set("CC_SWITCH_COLOR_MODE", "ansi256");
         let _colorterm = EnvGuard::remove("COLORTERM");
@@ -642,7 +659,9 @@ mod tests {
 
     #[test]
     fn no_color_has_priority_over_explicit_color_mode() {
-        let _lock = env_lock().lock().expect("env lock poisoned");
+        let _lock = env_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let _no_color = EnvGuard::set("NO_COLOR", "1");
         let _color_mode = EnvGuard::set("CC_SWITCH_COLOR_MODE", "truecolor");
         let _colorterm = EnvGuard::set("COLORTERM", "truecolor");
@@ -659,7 +678,9 @@ mod tests {
 
     #[test]
     fn theme_uses_ansi256_in_apple_terminal_without_truecolor_signal() {
-        let _lock = env_lock().lock().expect("env lock poisoned");
+        let _lock = env_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let _no_color = EnvGuard::remove("NO_COLOR");
         let _color_mode = EnvGuard::remove("CC_SWITCH_COLOR_MODE");
         let _colorterm = EnvGuard::remove("COLORTERM");
@@ -676,7 +697,9 @@ mod tests {
 
     #[test]
     fn explicit_truecolor_override_beats_apple_terminal_auto_fallback() {
-        let _lock = env_lock().lock().expect("env lock poisoned");
+        let _lock = env_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let _no_color = EnvGuard::remove("NO_COLOR");
         let _color_mode = EnvGuard::set("CC_SWITCH_COLOR_MODE", "truecolor");
         let _colorterm = EnvGuard::remove("COLORTERM");

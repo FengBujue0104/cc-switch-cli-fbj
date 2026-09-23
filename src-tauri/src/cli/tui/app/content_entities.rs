@@ -426,7 +426,7 @@ impl App {
                 self.overlay = Overlay::McpAppsPicker {
                     id: row.id.clone(),
                     name: row.server.name.clone(),
-                    selected: four_app_picker_index(&self.app_type),
+                    selected: picker_index_for_app(&mcp_picker_apps(), &self.app_type),
                     apps: row.server.apps.clone(),
                 };
                 Action::None
@@ -1375,6 +1375,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn claude_provider_list_o_key_requests_temporary_launch() {
         let mut app = App::new(Some(AppType::Claude));
         app.route = Route::Providers;
@@ -1391,6 +1392,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn codex_provider_o_key_requests_temporary_launch() {
         let mut app = App::new(Some(AppType::Codex));
         app.route = Route::Providers;

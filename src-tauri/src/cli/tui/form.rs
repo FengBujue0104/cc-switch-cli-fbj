@@ -504,8 +504,6 @@ pub enum McpAddField {
     Headers,
     AppClaude,
     AppCodex,
-    AppGemini,
-    AppOpenCode,
     AppHermes,
 }
 

@@ -125,10 +125,8 @@ impl FrameScheduler {
     }
 }
 
-fn apply_visible_apps_startup_policy(
-) -> Result<crate::services::visible_apps::VisibleAppsStartupOutcome, AppError> {
-    let detection = crate::services::visible_apps::detect_visible_app_installation();
-    crate::services::visible_apps::apply_startup_policy(&detection)
+fn apply_visible_apps_startup_policy() -> Result<crate::settings::VisibleApps, AppError> {
+    crate::services::visible_apps::apply_startup_policy()
 }
 
 fn resolve_initial_app_type(app_override: Option<AppType>) -> AppType {
@@ -150,8 +148,7 @@ fn initialize_app_state_with<F, FVisibleApps>(
 ) -> Result<(App, data::UiData), AppError>
 where
     F: FnOnce(&AppType) -> Result<data::UiData, AppError>,
-    FVisibleApps:
-        FnOnce() -> Result<crate::services::visible_apps::VisibleAppsStartupOutcome, AppError>,
+    FVisibleApps: FnOnce() -> Result<crate::settings::VisibleApps, AppError>,
 {
     let (app, _) = initialize_app_shell_with(app_override, apply_visible_apps)?;
     let data = load_data(&app.app_type)?;
@@ -163,23 +160,18 @@ fn initialize_app_shell_with<FVisibleApps>(
     apply_visible_apps: FVisibleApps,
 ) -> Result<(App, data::UiData), AppError>
 where
-    FVisibleApps:
-        FnOnce() -> Result<crate::services::visible_apps::VisibleAppsStartupOutcome, AppError>,
+    FVisibleApps: FnOnce() -> Result<crate::settings::VisibleApps, AppError>,
 {
-    let visible_apps_outcome = apply_visible_apps()?;
+    let visible_apps = apply_visible_apps()?;
+    debug_assert_eq!(
+        visible_apps.ordered_enabled(),
+        crate::settings::default_visible_apps().ordered_enabled(),
+        "startup policy must pin the tab bar to the supported harnesses"
+    );
     let app_type = resolve_initial_app_type(app_override);
     let mut app = App::new(Some(app_type));
     app.common_config_notice_confirmed = crate::settings::get_common_config_confirmed();
     app.usage_query_notice_confirmed = crate::settings::get_usage_confirmed();
-    if visible_apps_outcome.should_prompt {
-        app.prompt_visible_apps_auto_detection();
-    }
-    for notice in &visible_apps_outcome.notices {
-        app.push_toast(
-            crate::services::visible_apps::notice_message(notice),
-            ToastKind::Info,
-        );
-    }
     Ok((app, data::UiData::default()))
 }
 
@@ -191,10 +183,7 @@ fn initialize_app_state_for_test<F>(
 where
     F: FnOnce(&AppType) -> Result<data::UiData, AppError>,
 {
-    let detection = crate::services::visible_apps::VisibleAppsDetection::default();
-    initialize_app_state_with(app_override, load_data, || {
-        crate::services::visible_apps::apply_startup_policy(&detection)
-    })
+    initialize_app_state_with(app_override, load_data, apply_visible_apps_startup_policy)
 }
 
 #[derive(Default)]
@@ -2226,7 +2215,6 @@ fn cache_invalidation_for_action(action: &Action) -> CacheInvalidation {
         | Action::SkillsDiscover { .. }
         | Action::SkillsCheckUpdates
         | Action::SkillsUpdate { .. }
-        | Action::SkillsSetStorageLocation { .. }
         | Action::SkillsOpenImport
         | Action::SkillsScanUnmanaged
         | Action::EditorDiscard
@@ -2284,15 +2272,10 @@ fn cache_invalidation_for_action(action: &Action) -> CacheInvalidation {
         } => CacheInvalidation::CurrentAppDataChanged,
 
         Action::ReloadData
-        | Action::SetVisibleAppsMode { .. }
-        | Action::SetVisibleApps { .. }
-        | Action::ConfirmVisibleAppsAutoDetection { .. }
-        | Action::SwitchVisibleAppsToManual { .. }
         | Action::SkillsToggle { .. }
         | Action::SkillsSetApps { .. }
         | Action::SkillsUninstall { .. }
         | Action::SkillsSync { .. }
-        | Action::SkillsSetSyncMethod { .. }
         | Action::SkillsRepoAdd { .. }
         | Action::SkillsRepoRemove { .. }
         | Action::SkillsRepoToggleEnabled { .. }
@@ -2327,7 +2310,6 @@ fn cache_invalidation_for_action(action: &Action) -> CacheInvalidation {
         | Action::SetGlobalOutboundProxy { .. }
         | Action::SetProxyAutoFailover { .. }
         | Action::EnableProxyAndAutoFailover { .. }
-        | Action::SetOpenClawConfigDir { .. }
         | Action::SetPiConfigDir { .. } => CacheInvalidation::DataReloaded,
     }
 }

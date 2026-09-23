@@ -693,13 +693,13 @@ pub enum ProviderCommand {
         /// Explicit provider ID (default: generated from the name)
         #[arg(long)]
         id: Option<String>,
-        /// API endpoint base URL (Claude/Codex/Gemini field mode)
+        /// API endpoint base URL (Claude/Codex/Hermes field mode)
         #[arg(long, conflicts_with_all = ["config", "config_file"])]
         base_url: Option<String>,
-        /// API key or token (Claude/Codex/Gemini field mode)
+        /// API key or token (Claude/Codex/Hermes field mode)
         #[arg(long, conflicts_with_all = ["config", "config_file"])]
         api_key: Option<String>,
-        /// Default model (Claude/Codex/Gemini field mode, optional)
+        /// Default model (Claude/Codex/Hermes field mode, optional)
         #[arg(long, conflicts_with_all = ["config", "config_file"])]
         model: Option<String>,
         /// Claude Haiku role model ([1M] is ignored because Haiku does not support it)
@@ -744,7 +744,7 @@ pub enum ProviderCommand {
         /// Override max_tokens for a Codex Anthropic upstream
         #[arg(long)]
         max_output_tokens: Option<u64>,
-        /// Attach the app-level common config snippet (Claude/Codex/Gemini)
+        /// Attach the app-level common config snippet (Claude/Codex)
         #[arg(long)]
         common_config: bool,
         /// Codex OAuth managed account ID (required for the codex-oauth template)
@@ -783,7 +783,7 @@ pub enum ProviderCommand {
     SetDefault {
         /// Provider ID to set as default
         id: String,
-        /// OpenClaw model ID to set as primary; defaults to the first live model
+        /// Model to set as primary on apps that pick one; ignored elsewhere
         #[arg(long)]
         model: Option<String>,
     },

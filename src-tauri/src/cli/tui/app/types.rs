@@ -4383,9 +4383,6 @@ pub enum ConfirmAction {
     SkillsUninstall {
         directory: String,
     },
-    SkillsMigrateStorage {
-        location: crate::services::skill::SkillStorageLocation,
-    },
     SkillsRepoRemove {
         owner: String,
         name: String,
@@ -4405,11 +4402,6 @@ pub enum ConfirmAction {
     },
     SettingsSetGlobalOutboundProxy {
         config: crate::services::GlobalOutboundProxyConfig,
-    },
-    VisibleAppsAutoDetection,
-    VisibleAppsSwitchToManual {
-        apps: crate::settings::VisibleApps,
-        selected: usize,
     },
     ProviderApiFormatProxyNotice,
     CommonConfigNotice,
@@ -4502,7 +4494,6 @@ pub enum TextSubmit {
     SettingsOutboundProxyUrl,
     SettingsOutboundProxyUsername,
     SettingsOutboundProxyPassword,
-    SettingsOpenClawConfigDir,
     SettingsPiConfigDir,
     SettingsPreferredEditor,
     PiPromptTemplateCreate,
@@ -4771,10 +4762,6 @@ pub enum Overlay {
         selected: usize,
         apps: crate::app_config::McpApps,
     },
-    VisibleAppsPicker {
-        selected: usize,
-        apps: crate::settings::VisibleApps,
-    },
     SkillsAppsPicker {
         directory: String,
         name: String,
@@ -4785,13 +4772,6 @@ pub enum Overlay {
         skills: Vec<crate::services::skill::UnmanagedSkill>,
         selected_idx: usize,
         selected: HashSet<String>,
-    },
-    #[allow(dead_code)]
-    SkillsSyncMethodPicker {
-        selected: usize,
-    },
-    SkillsStorageLocationPicker {
-        selected: usize,
     },
     McpKeyValuePicker {
         kind: crate::cli::tui::form::McpKeyValueKind,
@@ -4957,11 +4937,8 @@ impl Overlay {
                 | Overlay::OpenClawToolsProfilePicker { .. }
                 | Overlay::OpenClawAgentsFallbackPicker { .. }
                 | Overlay::McpAppsPicker { .. }
-                | Overlay::VisibleAppsPicker { .. }
                 | Overlay::SkillsAppsPicker { .. }
                 | Overlay::SkillsImportPicker { .. }
-                | Overlay::SkillsSyncMethodPicker { .. }
-                | Overlay::SkillsStorageLocationPicker { .. }
                 | Overlay::McpKeyValuePicker { .. }
                 | Overlay::McpTypePicker { .. }
                 | Overlay::SpeedtestResult { .. }
@@ -5003,11 +4980,8 @@ impl Overlay {
             | Overlay::OpenClawToolsProfilePicker { .. }
             | Overlay::OpenClawAgentsFallbackPicker { .. }
             | Overlay::McpAppsPicker { .. }
-            | Overlay::VisibleAppsPicker { .. }
             | Overlay::SkillsAppsPicker { .. }
             | Overlay::SkillsImportPicker { .. }
-            | Overlay::SkillsSyncMethodPicker { .. }
-            | Overlay::SkillsStorageLocationPicker { .. }
             | Overlay::McpKeyValuePicker { .. }
             | Overlay::McpTypePicker { .. }
             | Overlay::Loading { .. }

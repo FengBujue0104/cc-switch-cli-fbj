@@ -529,7 +529,7 @@ impl Supervisor {
         }
         inner
             .cancelled_apps
-            .extend([AppType::Claude, AppType::Codex, AppType::Gemini]);
+            .extend(AppType::all().filter(|app| app.supports_failover()));
 
         let workers = inner
             .workers
@@ -727,8 +727,13 @@ impl Supervisor {
         // restored, then stop the worker. We snapshot the active list under
         // the inner lock so we don't hold it while running per-app restores
         // (which acquire the file-level state mutation guard).
+        //
+        // The app set must be derived, not written out: `clear_daemon_takeover_for_app`
+        // restores each app's live config from its backup, so a hardcoded list that
+        // still names a removed harness writes straight back into that harness's live
+        // directory every time the user turns the proxy off.
         let mut active = Vec::new();
-        for app in [AppType::Claude, AppType::Codex, AppType::Gemini] {
+        for app in AppType::all().filter(|app| app.supports_failover()) {
             match self.db.get_proxy_config_for_app(app.as_str()).await {
                 Ok(config) if config.enabled => active.push(app),
                 Ok(_) => {}
@@ -1169,13 +1174,17 @@ impl Handler for Supervisor {
     }
 }
 
+/// IPC 层的 app 解析闸门。
+///
+/// 第一道 `AppType::from_str` 必须留着（旧数据库/旧 IPC 负载里的 id 要能解析），
+/// 但真正决定"这个 app 能不能有 proxy worker"的是第二道 `supports_failover()`。
+/// 少了它，残留的 `"gemini"` 会让 daemon 为一个已删 harness 起 worker 并接管它的
+/// live 配置。
 fn parse_app_type(s: &str) -> Option<AppType> {
-    match s {
-        "claude" => Some(AppType::Claude),
-        "codex" => Some(AppType::Codex),
-        "gemini" => Some(AppType::Gemini),
-        _ => None,
-    }
+    use std::str::FromStr;
+
+    let app = AppType::from_str(s).ok()?;
+    app.supports_failover().then_some(app)
 }
 
 fn worker_exit_message(exit_status: &std::process::ExitStatus, stderr: &[u8]) -> Option<String> {
@@ -1311,6 +1320,9 @@ mod tests {
             .port();
         let server = tokio::spawn(async move {
             let (mut socket, _) = listener.accept().await.expect("accept status request");
+            use tokio::io::AsyncReadExt;
+            let mut request = [0u8; 4096];
+            let _ = socket.read(&mut request).await;
             let status = json!({
                 "running": true,
                 "address": "127.0.0.1",
@@ -1522,6 +1534,9 @@ mod tests {
             .port();
         let server = tokio::spawn(async move {
             let (mut socket, _) = listener.accept().await.expect("accept status request");
+            use tokio::io::AsyncReadExt;
+            let mut request = [0u8; 4096];
+            let _ = socket.read(&mut request).await;
             let status = json!({
                 "running": true,
                 "address": "127.0.0.1",

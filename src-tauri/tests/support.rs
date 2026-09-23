@@ -2,6 +2,8 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, RwLock};
+// 只有 Unix 的 daemon 清理路径需要超时计时；Windows 上留着 import 会是 unused。
+#[cfg(unix)]
 use std::time::{Duration, Instant};
 
 use cc_switch_lib::{
@@ -37,6 +39,10 @@ pub fn ensure_test_home() -> &'static Path {
 pub fn reset_test_fs() {
     let home = ensure_test_home();
     cleanup_test_processes_under(home);
+    // 必须覆盖 `AppType::all()` 里每个 harness 的 live 目录，以及已删 harness
+    // 的残留目录。漏掉任何一个都会把上一个测试的 live 状态泄漏到下一个测试：
+    // Hermes 的 live 目录默认就是 `~/.hermes`、Pi 是 `~/.pi/agent`，都没有
+    // 独立的环境变量开关，只能靠这里显式清理。
     for sub in [
         ".claude",
         ".codex",
@@ -44,20 +50,23 @@ pub fn reset_test_fs() {
         ".agents",
         ".gemini",
         ".openclaw",
+        ".opencode",
+        ".hermes",
         ".config",
         ".runtime",
         ".state",
     ] {
-        let path = home.join(sub);
-        if path.exists() {
-            if let Err(err) = std::fs::remove_dir_all(&path) {
-                eprintln!("failed to clean {}: {}", path.display(), err);
-            }
-        }
+        let _ = std::fs::remove_dir_all(home.join(sub));
     }
-    let claude_json = home.join(".claude.json");
-    if claude_json.exists() {
-        let _ = std::fs::remove_file(&claude_json);
+    for file in [".claude.json", ".pi"] {
+        let path = home.join(file);
+        if path.is_file() {
+            let _ = std::fs::remove_file(&path);
+        }
+        let dir = home.join(file);
+        if dir.is_dir() {
+            let _ = std::fs::remove_dir_all(&dir);
+        }
     }
 
     // 重置内存中的设置缓存，确保测试环境不受上一次调用影响

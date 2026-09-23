@@ -70,49 +70,6 @@ pub enum VisibleAppsCommand {
         #[arg(long)]
         json: bool,
     },
-
-    /// Set visible apps mode
-    Mode {
-        /// Mode to persist (auto|manual)
-        #[arg(value_enum)]
-        mode: VisibleAppsModeArg,
-    },
-
-    /// Enable one app and switch visibility to manual mode
-    Enable {
-        /// App to show
-        #[arg(value_enum)]
-        app: AppType,
-    },
-
-    /// Disable one app and switch visibility to manual mode
-    Disable {
-        /// App to hide
-        #[arg(value_enum)]
-        app: AppType,
-    },
-
-    /// Replace the visible app list and switch visibility to manual mode
-    Set {
-        /// Apps to show; at least one app is required
-        #[arg(value_enum, required = true)]
-        apps: Vec<AppType>,
-    },
-}
-
-#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VisibleAppsModeArg {
-    Auto,
-    Manual,
-}
-
-impl From<VisibleAppsModeArg> for crate::settings::VisibleAppsMode {
-    fn from(value: VisibleAppsModeArg) -> Self {
-        match value {
-            VisibleAppsModeArg::Auto => crate::settings::VisibleAppsMode::Auto,
-            VisibleAppsModeArg::Manual => crate::settings::VisibleAppsMode::Manual,
-        }
-    }
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -367,14 +324,12 @@ fn show_settings(json_output: bool) -> Result<(), AppError> {
         let payload = json!({
             "language": settings.language.as_deref().unwrap_or(Language::English.code()),
             "visibleApps": settings.visible_apps,
-            "visibleAppsMode": settings.visible_apps_settings.mode,
             "skipClaudeOnboarding": settings.skip_claude_onboarding,
             "enableClaudePluginIntegration": settings.enable_claude_plugin_integration,
             "preserveCodexOfficialAuthOnSwitch": settings.preserve_codex_official_auth_on_switch,
             "unifyCodexSessionHistory": settings.unify_codex_session_history,
             "unifyCodexMigrateExisting": settings.unify_codex_migrate_existing.unwrap_or(false),
             "hasCodexHistoryUnifyBackup": crate::codex_history_migration::has_codex_official_history_unify_backup(),
-            "openclawConfigDir": settings.openclaw_config_dir,
             "piConfigDir": settings.pi_config_dir,
             "preferredEditor": settings.preferred_editor,
         });
@@ -405,13 +360,6 @@ fn show_settings(json_output: bool) -> Result<(), AppError> {
         yes_no(settings.unify_codex_session_history)
     );
     println!(
-        "OpenClaw config dir: {}",
-        settings
-            .openclaw_config_dir
-            .as_deref()
-            .unwrap_or("(default)")
-    );
-    println!(
         "Pi config dir: {}",
         settings.pi_config_dir.as_deref().unwrap_or("(default)")
     );
@@ -440,10 +388,6 @@ fn language_cmd(language: Option<LanguageArg>) -> Result<(), AppError> {
 fn visible_apps_cmd(cmd: VisibleAppsCommand) -> Result<(), AppError> {
     match cmd {
         VisibleAppsCommand::Show { json } => show_visible_apps(json),
-        VisibleAppsCommand::Mode { mode } => set_visible_apps_mode(mode.into()),
-        VisibleAppsCommand::Enable { app } => mutate_visible_app(app, true),
-        VisibleAppsCommand::Disable { app } => mutate_visible_app(app, false),
-        VisibleAppsCommand::Set { apps } => set_visible_apps_list(apps),
     }
 }
 
@@ -451,7 +395,6 @@ fn show_visible_apps(json_output: bool) -> Result<(), AppError> {
     let settings = crate::settings::get_settings();
     if json_output {
         let payload = json!({
-            "mode": settings.visible_apps_settings.mode,
             "apps": settings.visible_apps,
             "enabled": enabled_app_labels(&settings.visible_apps),
         });
@@ -464,71 +407,6 @@ fn show_visible_apps(json_output: bool) -> Result<(), AppError> {
 
     print_visible_apps_summary();
     Ok(())
-}
-
-fn set_visible_apps_mode(mode: crate::settings::VisibleAppsMode) -> Result<(), AppError> {
-    crate::settings::set_visible_apps_mode(mode)?;
-    if mode == crate::settings::VisibleAppsMode::Auto {
-        let detection = crate::services::visible_apps::detect_visible_app_installation();
-        let outcome = crate::services::visible_apps::apply_startup_policy(&detection)?;
-        for notice in outcome.notices {
-            println!(
-                "{}",
-                info(&crate::services::visible_apps::notice_message(&notice))
-            );
-        }
-    }
-
-    println!(
-        "{}",
-        success(&format!(
-            "Visible apps mode set to {}",
-            visible_apps_mode_label(mode)
-        ))
-    );
-    Ok(())
-}
-
-fn mutate_visible_app(app: AppType, enabled: bool) -> Result<(), AppError> {
-    let mut visible_apps = crate::settings::get_visible_apps();
-    visible_apps.set_enabled_for(&app, enabled);
-    save_manual_visible_apps(visible_apps)?;
-    println!(
-        "{}",
-        success(&format!(
-            "{} {}",
-            if enabled { "Enabled" } else { "Disabled" },
-            app.as_str()
-        ))
-    );
-    Ok(())
-}
-
-fn set_visible_apps_list(apps: Vec<AppType>) -> Result<(), AppError> {
-    let mut visible_apps = crate::settings::VisibleApps {
-        claude: false,
-        codex: false,
-        gemini: false,
-        opencode: false,
-        hermes: false,
-        openclaw: false,
-        pi: false,
-    };
-    for app in apps {
-        visible_apps.set_enabled_for(&app, true);
-    }
-    save_manual_visible_apps(visible_apps)?;
-    println!("{}", success("Visible apps updated"));
-    Ok(())
-}
-
-fn save_manual_visible_apps(visible_apps: crate::settings::VisibleApps) -> Result<(), AppError> {
-    visible_apps.validate()?;
-    let mut settings = crate::settings::get_settings();
-    settings.visible_apps = visible_apps;
-    settings.visible_apps_settings.mode = crate::settings::VisibleAppsMode::Manual;
-    settings.visible_apps_settings.auto_prompt_decided = true;
-    crate::settings::update_settings(settings)
 }
 
 fn claude_onboarding_cmd(cmd: ClaudeOnboardingCommand) -> Result<(), AppError> {
@@ -825,20 +703,9 @@ fn print_codex_history_migration_outcome(
 fn print_visible_apps_summary() {
     let settings = crate::settings::get_settings();
     println!(
-        "Visible apps mode: {}",
-        visible_apps_mode_label(settings.visible_apps_settings.mode)
-    );
-    println!(
         "Visible apps: {}",
         enabled_app_labels(&settings.visible_apps).join(", ")
     );
-}
-
-fn visible_apps_mode_label(mode: crate::settings::VisibleAppsMode) -> &'static str {
-    match mode {
-        crate::settings::VisibleAppsMode::Auto => "auto",
-        crate::settings::VisibleAppsMode::Manual => "manual",
-    }
 }
 
 fn enabled_app_labels(visible_apps: &crate::settings::VisibleApps) -> Vec<&'static str> {
@@ -859,10 +726,9 @@ fn yes_no(value: bool) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::{
-        official_codex_sessions_need_migrate, save_manual_visible_apps, set_codex_auth_preservation,
-        OutboundProxyCommand,
+        official_codex_sessions_need_migrate, set_codex_auth_preservation, OutboundProxyCommand,
     };
-    use crate::settings::{AppSettings, VisibleApps, VisibleAppsMode};
+    use crate::settings::AppSettings;
     use crate::test_support::TestEnvGuard;
     use serial_test::serial;
     use std::fs;
@@ -909,50 +775,6 @@ mod tests {
                 _temp: temp,
             }
         }
-    }
-
-    #[test]
-    #[serial(home_settings)]
-    fn settings_visible_apps_manual_save_switches_mode_and_marks_prompt_decided() {
-        let _guard = SettingsTestGuard::new();
-        crate::settings::set_visible_apps_mode(VisibleAppsMode::Auto).expect("set auto mode");
-
-        save_manual_visible_apps(VisibleApps {
-            claude: true,
-            codex: false,
-            gemini: true,
-            opencode: false,
-            hermes: false,
-            openclaw: false,
-            pi: false,
-        })
-        .expect("save manual visible apps");
-
-        let settings = crate::settings::get_settings();
-        assert_eq!(settings.visible_apps_settings.mode, VisibleAppsMode::Manual);
-        assert!(settings.visible_apps_settings.auto_prompt_decided);
-        assert!(settings.visible_apps.claude);
-        assert!(settings.visible_apps.gemini);
-        assert!(!settings.visible_apps.codex);
-    }
-
-    #[test]
-    #[serial(home_settings)]
-    fn settings_visible_apps_manual_save_rejects_empty_selection() {
-        let _guard = SettingsTestGuard::new();
-
-        let err = save_manual_visible_apps(VisibleApps {
-            claude: false,
-            codex: false,
-            gemini: false,
-            opencode: false,
-            hermes: false,
-            openclaw: false,
-            pi: false,
-        })
-        .expect_err("empty visible apps should be rejected");
-
-        assert!(err.to_string().contains("At least one app"));
     }
 
     #[test]

@@ -1,5 +1,8 @@
 use std::sync::mpsc;
-use std::{ffi::OsString, path::Path};
+use std::{
+    ffi::OsString,
+    path::{Path, PathBuf},
+};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEventKind};
 use ratatui::{buffer::Buffer, layout::Rect};
@@ -277,6 +280,7 @@ fn pi_native_prompt_pages_put_behavioral_guidance_in_context_help() {
 struct EnvGuard {
     _lock: TestHomeSettingsLock,
     old_home: Option<OsString>,
+    old_test_home_override: Option<PathBuf>,
     old_userprofile: Option<OsString>,
     old_cc_switch_config_dir: Option<OsString>,
     old_claude_config_dir: Option<OsString>,
@@ -287,6 +291,7 @@ impl EnvGuard {
     fn set_home(home: &Path) -> Self {
         let lock = lock_test_home_and_settings();
         let old_home = std::env::var_os("HOME");
+        let old_test_home_override = crate::test_support::test_home_override();
         let old_userprofile = std::env::var_os("USERPROFILE");
         let old_cc_switch_config_dir = std::env::var_os("CC_SWITCH_CONFIG_DIR");
         let old_claude_config_dir = std::env::var_os("CLAUDE_CONFIG_DIR");
@@ -301,6 +306,7 @@ impl EnvGuard {
         Self {
             _lock: lock,
             old_home,
+            old_test_home_override,
             old_userprofile,
             old_cc_switch_config_dir,
             old_claude_config_dir,
@@ -331,7 +337,7 @@ impl Drop for EnvGuard {
             Some(value) => std::env::set_var("CODEX_HOME", value),
             None => std::env::remove_var("CODEX_HOME"),
         }
-        set_test_home_override(self.old_home.as_deref().map(Path::new));
+        set_test_home_override(self.old_test_home_override.as_deref());
         crate::settings::reload_test_settings();
     }
 }
@@ -1609,12 +1615,12 @@ fn initial_app_data_result_restores_startup_overlay_and_caches_loaded_data() {
     app.overlay = Overlay::Confirm(ConfirmOverlay {
         title: "Visible apps".to_string(),
         message: "Review detected apps".to_string(),
-        action: ConfirmAction::VisibleAppsAutoDetection,
+        action: ConfirmAction::ConfigReset,
     });
     let mut startup_overlay = Some(Overlay::Confirm(ConfirmOverlay {
         title: "Visible apps".to_string(),
         message: "Review detected apps".to_string(),
-        action: ConfirmAction::VisibleAppsAutoDetection,
+        action: ConfirmAction::ConfigReset,
     }));
 
     let mut loaded = UiData::default();
@@ -1655,7 +1661,7 @@ fn initial_app_data_result_restores_startup_overlay_and_caches_loaded_data() {
     assert!(matches!(
         app.overlay,
         Overlay::Confirm(ConfirmOverlay {
-            action: ConfirmAction::VisibleAppsAutoDetection,
+            action: ConfirmAction::ConfigReset,
             ..
         })
     ));
@@ -5451,16 +5457,6 @@ async fn model_fetch_sends_trimmed_custom_user_agent() {
 fn startup_hidden_requested_app_bootstrap_uses_visible_app_normalization_before_loading_data() {
     let temp_home = TempDir::new().expect("create temp home");
     let _env = EnvGuard::set_home(temp_home.path());
-    crate::settings::set_visible_apps(crate::settings::VisibleApps {
-        claude: true,
-        codex: true,
-        gemini: false,
-        opencode: true,
-        hermes: false,
-        openclaw: true,
-        pi: false,
-    })
-    .expect("save visible apps");
 
     let mut loaded_app_type = None;
     let (app, _data) = initialize_app_state_for_test(Some(AppType::Gemini), |app_type| {
@@ -5469,8 +5465,12 @@ fn startup_hidden_requested_app_bootstrap_uses_visible_app_normalization_before_
     })
     .expect("bootstrap app state");
 
-    assert_eq!(loaded_app_type, Some(AppType::OpenCode));
-    assert_eq!(app.app_type, AppType::OpenCode);
+    let resolved = loaded_app_type.expect("resolved app type");
+    assert!(
+        AppType::all().any(|app_type| app_type == resolved),
+        "a requested unsupported harness must fall back to a supported one"
+    );
+    assert_eq!(resolved, app.app_type);
 }
 
 #[test]

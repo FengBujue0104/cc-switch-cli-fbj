@@ -34,13 +34,13 @@ pub fn prompt_file_path(app: &AppType) -> Result<PathBuf, AppError> {
 }
 
 fn default_openclaw_dir() -> PathBuf {
-    dirs::home_dir()
+    crate::config::home_dir()
         .map(|home| home.join(".openclaw"))
         .unwrap_or_else(|| PathBuf::from(".openclaw"))
 }
 
 fn default_hermes_dir() -> PathBuf {
-    dirs::home_dir()
+    crate::config::home_dir()
         .map(|home| home.join(".hermes"))
         .unwrap_or_else(|| PathBuf::from(".hermes"))
 }
@@ -52,7 +52,7 @@ fn get_base_dir_with_fallback(
     primary_path
         .parent()
         .map(|p| p.to_path_buf())
-        .or_else(|| dirs::home_dir().map(|h| h.join(fallback_dir)))
+        .or_else(|| crate::config::home_dir().map(|h| h.join(fallback_dir)))
         .ok_or_else(|| {
             AppError::localized(
                 "home_dir_not_found",

@@ -198,8 +198,6 @@ impl App {
                     }
                     McpAddField::AppClaude => mcp.apps.claude = !mcp.apps.claude,
                     McpAddField::AppCodex => mcp.apps.codex = !mcp.apps.codex,
-                    McpAddField::AppGemini => mcp.apps.gemini = !mcp.apps.gemini,
-                    McpAddField::AppOpenCode => mcp.apps.opencode = !mcp.apps.opencode,
                     McpAddField::AppHermes => mcp.apps.hermes = !mcp.apps.hermes,
                     _ => {
                         if selected == McpAddField::Id && mcp.locked_id().is_some() {

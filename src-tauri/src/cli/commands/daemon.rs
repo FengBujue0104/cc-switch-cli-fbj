@@ -113,8 +113,8 @@ fn status_daemon() -> Result<(), AppError> {
                 );
             }
             println!(
-                "  takeovers:     claude={}, codex={}, gemini={}",
-                takeovers.claude, takeovers.codex, takeovers.gemini
+                "  takeovers:     claude={}, codex={}",
+                takeovers.claude, takeovers.codex
             );
             println!("  restart count: {restart_count}");
             if let Some(at) = last_restart_at {

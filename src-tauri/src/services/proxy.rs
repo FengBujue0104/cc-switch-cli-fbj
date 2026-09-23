@@ -900,7 +900,12 @@ impl ProxyService {
 
     pub async fn recover_takeovers_on_startup(&self) -> Result<(), String> {
         let _guard = crate::services::state_coordination::acquire_restore_mutation_guard().await?;
-        for app_type in [AppType::Claude, AppType::Codex, AppType::Gemini] {
+        // 接管集合必须从 `supports_failover()` 派生。写死一份 `[Claude, Codex,
+        // Gemini]` 时，数据库里残留的 gemini route/backup 会让这条恢复路径在每次
+        // 启动时把 takeover 后的 live 配置写回 `~/.gemini`——那正是清理要防的事。
+        // 真正的闸门是 `takeover_app_from_str`（daemon 字符串入口），这里是内部
+        // 直接传 `AppType`，绕得过去，所以名单本身不能再带已删 harness。
+        for app_type in AppType::all().filter(|app| app.supports_failover()) {
             if self.has_managed_worker_for_app(&app_type).await {
                 self.reconcile_takeover_for_live_managed_worker(&app_type)
                     .await?;
@@ -2814,7 +2819,9 @@ impl ProxyService {
     }
 
     async fn restore_active_takeovers_on_shutdown_unlocked(&self) -> Result<(), String> {
-        for app_type in [AppType::Claude, AppType::Codex, AppType::Gemini] {
+        // 同 `recover_takeovers_on_startup`：名单只能来自 `supports_failover()`。
+        // 已删 harness 的 backup 行留在库里，但不再有人去把它写回 `~/.gemini`。
+        for app_type in AppType::all().filter(|app| app.supports_failover()) {
             self.disable_takeover_for_app_unlocked(&app_type, false)
                 .await?;
         }
@@ -4412,13 +4419,22 @@ impl ProxyService {
         write_gemini_env_atomic(&env).map_err(|error| format!("write Gemini .env failed: {error}"))
     }
 
+    /// 字符串入口的代理接管闸门。
+    ///
+    /// 这里要过两道关，缺一不可：`AppType::from_str` 必须仍然认识已删的 id
+    /// （否则旧数据库/旧 `proxy_runtime_session` 行加载即失败），但接管集合要跟着
+    /// `supports_failover()` 收窄。少了第二道，持久化行里残留的 `"gemini"` 会让
+    /// daemon 启动时重新"接管"一个已删 harness，并把 takeover 后的 live 配置写回
+    /// `~/.gemini`——那正是清理要防的事。
     fn takeover_app_from_str(app_type: &str) -> Result<AppType, String> {
-        match app_type {
-            "claude" => Ok(AppType::Claude),
-            "codex" => Ok(AppType::Codex),
-            "gemini" => Ok(AppType::Gemini),
-            _ => Err(format!("proxy takeover not supported for app: {app_type}")),
+        use std::str::FromStr;
+
+        let app = AppType::from_str(app_type)
+            .map_err(|_| format!("proxy takeover not supported for app: {app_type}"))?;
+        if !app.supports_failover() {
+            return Err(format!("proxy takeover not supported for app: {app_type}"));
         }
+        Ok(app)
     }
 }
 
@@ -4438,6 +4454,34 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicBool, Ordering};
     use tempfile::TempDir;
+
+    /// 接管闸门必须跟着 `supports_failover()` 收窄，而且要过两道关。
+    ///
+    /// 这个函数以前直接匹配字符串并接受 `"gemini"`。`proxy_config` 和
+    /// `proxy_runtime_session` 这类持久化行里都可能留着 `"gemini"`，只要闸门还放
+    /// 它过去，daemon 重启时就会把一个已删 harness 重新"接管"，并把 takeover 后
+    /// 的 live 配置写回 `~/.gemini`。第一道 `from_str` 必须留着，否则旧数据加载
+    /// 直接失败——所以真正的把关落在第二道上。
+    #[test]
+    fn takeover_app_from_str_only_accepts_takeover_capable_harnesses() {
+        for id in ["gemini", "opencode", "openclaw", "hermes", "pi", "nope"] {
+            let error = ProxyService::takeover_app_from_str(id)
+                .expect_err(&format!("{id} must not be a proxy takeover target"));
+            assert!(
+                error.contains("proxy takeover not supported for app"),
+                "unexpected error for {id}: {error}"
+            );
+        }
+
+        assert_eq!(
+            ProxyService::takeover_app_from_str("claude").expect("claude takeover target"),
+            AppType::Claude
+        );
+        assert_eq!(
+            ProxyService::takeover_app_from_str("codex").expect("codex takeover target"),
+            AppType::Codex
+        );
+    }
 
     fn seed_proxy_flags_raw(
         db: &Database,
@@ -5071,6 +5115,9 @@ experimental_bearer_token = "PROXY_MANAGED"
             .port();
         let server = tokio::spawn(async move {
             let (mut socket, _) = listener.accept().await.expect("accept status request");
+            use tokio::io::AsyncReadExt;
+            let mut request = [0u8; 4096];
+            let _ = socket.read(&mut request).await;
             let status = json!({
                 "running": true,
                 "address": "127.0.0.1",
@@ -5166,6 +5213,7 @@ experimental_bearer_token = "PROXY_MANAGED"
         _lock: crate::test_support::TestHomeSettingsLock,
         home: PathBuf,
         old_home: Option<OsString>,
+        old_test_home_override: Option<PathBuf>,
         old_userprofile: Option<OsString>,
         old_xdg_config_home: Option<OsString>,
         old_xdg_runtime_dir: Option<OsString>,
@@ -5179,6 +5227,7 @@ experimental_bearer_token = "PROXY_MANAGED"
         fn set(home: &Path) -> Self {
             let lock = lock_test_home_and_settings();
             let old_home = std::env::var_os("HOME");
+            let old_test_home_override = crate::test_support::test_home_override();
             let old_userprofile = std::env::var_os("USERPROFILE");
             let old_xdg_config_home = std::env::var_os("XDG_CONFIG_HOME");
             let old_xdg_runtime_dir = std::env::var_os("XDG_RUNTIME_DIR");
@@ -5200,6 +5249,7 @@ experimental_bearer_token = "PROXY_MANAGED"
                 _lock: lock,
                 home: home.to_path_buf(),
                 old_home,
+                old_test_home_override,
                 old_userprofile,
                 old_xdg_config_home,
                 old_xdg_runtime_dir,
@@ -5222,7 +5272,7 @@ experimental_bearer_token = "PROXY_MANAGED"
             restore_env("CC_SWITCH_CONFIG_DIR", &self.old_config_dir);
             restore_env("CLAUDE_CONFIG_DIR", &self.old_claude_config_dir);
             restore_env("CODEX_HOME", &self.old_codex_home);
-            set_test_home_override(self.old_home.as_deref().map(Path::new));
+            set_test_home_override(self.old_test_home_override.as_deref());
             crate::settings::reload_test_settings();
         }
     }
@@ -6257,6 +6307,89 @@ wire_api = "responses"
         );
     }
 
+    /// 启动恢复的遍历名单必须来自 `supports_failover()`。
+    ///
+    /// 已删 harness 的残渣会一直留在库里：`proxy_config` 还开着、`proxy_live_backup`
+    /// 还有行、live 配置还是 takeover 后的占位 token。以前 `recover_takeovers_on_startup`
+    /// 的名单写死了 `[Claude, Codex, Gemini]`，这套组合每次启动都会把 takeover 后的
+    /// 配置按备份或当前供应商"恢复"回 `~/.gemini`——用户删掉的 harness 又被程序写活
+    /// 了。现在名单只含 `supports_failover()` 的 harness，整个 live 目录必须一个字节
+    /// 都不动。
+    #[tokio::test]
+    #[serial]
+    async fn recover_takeovers_on_startup_leaves_removed_harness_live_config_untouched() {
+        let temp_home = TempDir::new().expect("create temp home");
+        let _env = TestHomeEnvGuard::set(temp_home.path());
+
+        let gemini_dir = crate::gemini_config::get_gemini_dir();
+        std::fs::create_dir_all(&gemini_dir).expect("create ~/.gemini");
+        std::fs::write(
+            get_gemini_env_path(),
+            format!(
+                "GEMINI_API_KEY={PROXY_TOKEN_PLACEHOLDER}\nGOOGLE_GEMINI_BASE_URL=http://127.0.0.1:15721\n"
+            ),
+        )
+        .expect("seed taken-over gemini live config");
+
+        let db = Arc::new(Database::memory().expect("create database"));
+        db.save_live_backup(
+            "gemini",
+            &json!({ "env": { "GEMINI_API_KEY": "residual-gemini-key" } }).to_string(),
+        )
+        .await
+        .expect("save residual gemini live backup");
+        let mut gemini_proxy = db
+            .get_proxy_config_for_app("gemini")
+            .await
+            .expect("load gemini proxy config");
+        gemini_proxy.enabled = true;
+        db.update_proxy_config_for_app(gemini_proxy)
+            .await
+            .expect("mark gemini proxy config enabled");
+
+        let before = snapshot_live_dir(&gemini_dir);
+
+        let service = ProxyService::new(db);
+        service
+            .recover_takeovers_on_startup()
+            .await
+            .expect("startup recovery should skip removed harnesses");
+
+        assert_eq!(
+            snapshot_live_dir(&gemini_dir),
+            before,
+            "startup recovery must not write back a removed harness's live directory"
+        );
+    }
+
+    /// (相对路径, 文件内容) 快照，用来断言"一个字节都没动、一行也没增删"。
+    fn snapshot_live_dir(base: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+        let mut files = Vec::new();
+        collect_live_files(base, base, &mut files);
+        files.sort_by(|left, right| left.0.cmp(&right.0));
+        files
+    }
+
+    fn collect_live_files(base: &Path, dir: &Path, out: &mut Vec<(PathBuf, Vec<u8>)>) {
+        let mut entries = std::fs::read_dir(dir)
+            .expect("read live dir")
+            .map(|entry| entry.expect("live dir entry").path())
+            .collect::<Vec<_>>();
+        entries.sort();
+        for path in entries {
+            if path.is_dir() {
+                collect_live_files(base, &path, out);
+            } else {
+                out.push((
+                    path.strip_prefix(base)
+                        .expect("live file under the live dir")
+                        .to_path_buf(),
+                    std::fs::read(&path).expect("read live file"),
+                ));
+            }
+        }
+    }
+
     #[tokio::test]
     #[serial]
     async fn enabling_claude_takeover_syncs_live_token_back_to_current_provider() {
@@ -6596,8 +6729,13 @@ base_url = "https://api.openai.com/v1"
         );
     }
 
+    /// 回归的是"接管时按本地设置里的有效当前供应商同步 live token"这条逻辑。
+    /// Gemini 只是当时手边的一个带 `env` 字段的 harness，语义上和 Claude/Codex
+    /// 没有区别；harness 已删，`takeover_app_from_str` 也不再放 `"gemini"` 过去，
+    /// 所以这里整条跳过。等价路径由 Claude/Codex 的同名用例覆盖。
     #[tokio::test]
     #[serial]
+    #[ignore = "Gemini harness removed from this build: proxy takeover no longer accepts a gemini app id"]
     async fn enabling_gemini_takeover_syncs_live_token_to_effective_current_provider() {
         let temp_home = TempDir::new().expect("create temp home");
         let _env = TestHomeEnvGuard::set(temp_home.path());
@@ -7267,6 +7405,9 @@ base_url = "https://api.openai.com/v1"
 
         let server = tokio::spawn(async move {
             let (mut socket, _) = listener.accept().await.expect("accept status request");
+            use tokio::io::AsyncReadExt;
+            let mut request = [0u8; 4096];
+            let _ = socket.read(&mut request).await;
             let response = format!(
                 "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
                 status.to_string().len(),
@@ -7336,6 +7477,9 @@ base_url = "https://api.openai.com/v1"
 
         let server = tokio::spawn(async move {
             let (mut socket, _) = listener.accept().await.expect("accept status request");
+            use tokio::io::AsyncReadExt;
+            let mut request = [0u8; 4096];
+            let _ = socket.read(&mut request).await;
             let response = format!(
                 "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
                 status.to_string().len(),
@@ -7991,6 +8135,7 @@ base_url = "https://new.example/v1"
     fn build_failover_snapshot_removes_stale_unified_bucket_when_disabled() {
         let temp_home = TempDir::new().expect("create temp home");
         let _env = TestHomeEnvGuard::set(temp_home.path());
+        crate::test_support::disable_unified_codex_session_history();
         let service = ProxyService::new(Arc::new(Database::memory().expect("init db")));
 
         let mut provider = Provider::with_id(
@@ -8033,6 +8178,7 @@ base_url = "https://new.example/v1"
     async fn cached_codex_failover_snapshot_refreshes_provider_config_and_policy() {
         let temp_home = TempDir::new().expect("create temp home");
         let _env = TestHomeEnvGuard::set(temp_home.path());
+        crate::test_support::disable_unified_codex_session_history();
         let db = Arc::new(Database::memory().expect("init db"));
         let service = ProxyService::new(db.clone());
 
@@ -8093,6 +8239,7 @@ base_url = "https://new.example/v1"
     async fn restore_codex_live_backup_applies_current_unified_session_policy() {
         let temp_home = TempDir::new().expect("create temp home");
         let _env = TestHomeEnvGuard::set(temp_home.path());
+        crate::test_support::disable_unified_codex_session_history();
         let db = Arc::new(Database::memory().expect("init db"));
         let service = ProxyService::new(db.clone());
 
@@ -9116,8 +9263,12 @@ requires_openai_auth = true
         );
     }
 
+    /// 回归的是"备份快照只保留 gemini 的 `env` 子集"这条格式规则。
+    /// harness 已删，`takeover_app_from_str` 不再放 `"gemini"` 过去，所以整条
+    /// 跳过；同一条格式规则对其他 harness 的备份路径由其它用例覆盖。
     #[tokio::test]
     #[serial]
+    #[ignore = "Gemini harness removed from this build: proxy backup APIs no longer accept a gemini app id"]
     async fn update_live_backup_from_provider_for_gemini_keeps_only_env_snapshot() {
         let temp_home = TempDir::new().expect("create temp home");
         let _env = TestHomeEnvGuard::set(temp_home.path());
@@ -9187,8 +9338,12 @@ requires_openai_auth = true
         );
     }
 
+    /// 回归的是"热切换后把恢复备份刷成新选中的供应商，且保留 live 里的本地字段"
+    /// 这条逻辑。Gemini 只是当时的一个 harness；它已删，`takeover_app_from_str`
+    /// 不再放 `"gemini"` 过去，所以整条跳过，等价路径走 Claude/Codex。
     #[tokio::test]
     #[serial]
+    #[ignore = "Gemini harness removed from this build: proxy hot-switch no longer accepts a gemini app id"]
     async fn hot_switch_gemini_provider_refreshes_restore_backup_to_selected_provider() {
         let temp_home = TempDir::new().expect("create temp home");
         let _env = TestHomeEnvGuard::set(temp_home.path());

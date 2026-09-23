@@ -359,6 +359,7 @@ impl Drop for NamespaceCleanup {
                 // namespace. Leave it intact; the next CLI startup will retry.
                 return Ok(None);
             };
+            drop(namespace_lock);
             let mut batch = None;
             let mut sequence = 0usize;
             quarantine_into_batch(
@@ -367,7 +368,6 @@ impl Drop for NamespaceCleanup {
                 &mut batch,
                 &mut sequence,
             );
-            drop(namespace_lock);
             if self.namespace_root.exists() {
                 return Err(ManifestError::Corrupt(
                     "namespace quarantine rename did not complete".to_string(),
@@ -1241,8 +1241,8 @@ impl PagedManifestStore {
                 let Ok(Some(lease)) = FileLock::try_exclusive(&lease_path) else {
                     continue;
                 };
-                quarantine_into_batch(&from, &scope_dir, &mut batch, &mut sequence);
                 drop(lease);
+                quarantine_into_batch(&from, &scope_dir, &mut batch, &mut sequence);
             }
             batch
         };
@@ -1708,6 +1708,7 @@ impl PagedManifestBuilder {
                 }
             }
 
+            self.owner_lock.take();
             fs::rename(&self.staging_dir, &final_dir)
                 .map_err(|error| ManifestError::io(&self.staging_dir, error))?;
             let mut pointer_updated = false;
@@ -2525,8 +2526,8 @@ fn cleanup_cli_namespaces_locked(cli_root: &Path, active_namespace: &str) -> Vec
         let lease_path = entry.path().join(NAMESPACE_LOCK_FILE);
         match FileLock::try_exclusive(&lease_path) {
             Ok(Some(lease)) => {
-                quarantine_into_batch(&entry.path(), cli_root, &mut batch, &mut sequence);
                 drop(lease);
+                quarantine_into_batch(&entry.path(), cli_root, &mut batch, &mut sequence);
             }
             Ok(None) => {}
             Err(error) => log::debug!(
@@ -2583,8 +2584,8 @@ fn cleanup_leased_namespaces_locked(
         let lease_path = entry.path().join(NAMESPACE_LOCK_FILE);
         match FileLock::try_exclusive(&lease_path) {
             Ok(Some(lease)) => {
-                quarantine_into_batch(&entry.path(), namespace_root, &mut batch, &mut sequence);
                 drop(lease);
+                quarantine_into_batch(&entry.path(), namespace_root, &mut batch, &mut sequence);
             }
             Ok(None) => {}
             Err(error) => log::debug!(

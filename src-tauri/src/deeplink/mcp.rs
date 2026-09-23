@@ -167,6 +167,12 @@ pub fn import_mcp_from_deeplink(
 }
 
 /// Parse apps string into McpApps struct
+///
+/// Only accepts harnesses this build can actually project MCP to. The removed
+/// harnesses keep their `McpApps` bits so old database rows still read back, but
+/// a deep link that names them would only produce switches that never project
+/// (`enabled_apps()` filters them out) — accepting that silently is exactly the
+/// "not fully deleted" shape this build is removing.
 pub(crate) fn parse_mcp_apps(apps_str: &str) -> Result<McpApps, AppError> {
     let mut apps = McpApps {
         claude: false,
@@ -177,21 +183,22 @@ pub(crate) fn parse_mcp_apps(apps_str: &str) -> Result<McpApps, AppError> {
     };
 
     for app in apps_str.split(',') {
-        match app.trim() {
+        let app = app.trim();
+        // A trailing separator ("claude,") is a typo, not a request.
+        if app.is_empty() {
+            continue;
+        }
+        if !super::is_supported_deeplink_mcp_app(app) {
+            return Err(AppError::InvalidInput(format!(
+                "Unsupported app in 'apps': '{app}'. Supported apps: {}",
+                super::supported_deeplink_mcp_app_ids()
+            )));
+        }
+        match app {
             "claude" => apps.claude = true,
             "codex" => apps.codex = true,
-            "gemini" => apps.gemini = true,
-            "opencode" => apps.opencode = true,
-            "openclaw" => {
-                // OpenClaw doesn't support MCP, ignore silently
-                log::debug!("OpenClaw doesn't support MCP, ignoring in apps parameter");
-            }
             "hermes" => apps.hermes = true,
-            other => {
-                return Err(AppError::InvalidInput(format!(
-                    "Invalid app in 'apps': {other}"
-                )))
-            }
+            other => unreachable!("gate above already rejected '{other}'"),
         }
     }
 

@@ -12,7 +12,7 @@ impl App {
 
         match &self.overlay {
             Overlay::CommonSnippetPicker { selected } => {
-                let app_type = snippet_picker_app_type(*selected);
+                let app_type = picker_app_for_index(&snippet_picker_apps(), *selected);
                 self.open_common_snippet_editor(
                     app_type,
                     data,
@@ -178,11 +178,11 @@ impl App {
                 Action::None
             }
             KeyCode::Down => {
-                *selected = (*selected + 1).min(3);
+                *selected = (*selected + 1).min(picker_last_index(&snippet_picker_apps()));
                 Action::None
             }
             KeyCode::Enter => {
-                let app_type = snippet_picker_app_type(*selected);
+                let app_type = picker_app_for_index(&snippet_picker_apps(), *selected);
                 self.open_common_snippet_editor(
                     app_type,
                     data,

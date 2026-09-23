@@ -1399,6 +1399,7 @@ mod tests {
     use std::collections::HashMap;
     use std::ffi::OsString;
     use std::path::Path;
+    use std::path::PathBuf;
     use tempfile::{tempdir, TempDir};
 
     use crate::app_config::AppType;
@@ -1466,6 +1467,7 @@ mod tests {
     struct EnvGuard {
         _lock: TestHomeSettingsLock,
         old_home: Option<OsString>,
+        old_test_home_override: Option<PathBuf>,
         old_userprofile: Option<OsString>,
         old_config_dir: Option<OsString>,
     }
@@ -1474,6 +1476,7 @@ mod tests {
         fn set_home(home: &Path) -> Self {
             let lock = lock_test_home_and_settings();
             let old_home = std::env::var_os("HOME");
+            let old_test_home_override = crate::test_support::test_home_override();
             let old_userprofile = std::env::var_os("USERPROFILE");
             let old_config_dir = std::env::var_os("CC_SWITCH_CONFIG_DIR");
             std::env::set_var("HOME", home);
@@ -1484,6 +1487,7 @@ mod tests {
             Self {
                 _lock: lock,
                 old_home,
+                old_test_home_override,
                 old_userprofile,
                 old_config_dir,
             }
@@ -1504,7 +1508,7 @@ mod tests {
                 Some(value) => std::env::set_var("CC_SWITCH_CONFIG_DIR", value),
                 None => std::env::remove_var("CC_SWITCH_CONFIG_DIR"),
             }
-            set_test_home_override(self.old_home.as_deref().map(Path::new));
+            set_test_home_override(self.old_test_home_override.as_deref());
             crate::settings::reload_test_settings();
         }
     }
@@ -2680,6 +2684,7 @@ mod tests {
 
     #[test]
     #[serial(home_settings)]
+    #[ignore = "OpenCode harness removed from this build: additive duplicate addToLive semantics no longer apply to it"]
     fn submit_provider_copy_after_settings_json_apply_keeps_duplicate_semantics() {
         let mut fixture = runtime_ctx(AppType::OpenCode);
 
@@ -2827,6 +2832,7 @@ mod tests {
 
     #[test]
     #[serial(home_settings)]
+    #[ignore = "OpenClaw harness removed from this build: live-backed provider editing no longer applies to it"]
     fn submit_provider_edit_updates_openclaw_live_backed_provider() {
         let home_dir = tempdir().expect("create temp home");
         let openclaw_dir = tempdir().expect("create temp openclaw dir");

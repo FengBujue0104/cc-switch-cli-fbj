@@ -81,10 +81,12 @@ pub(crate) async fn inspect_auto_failover_gate(
 }
 
 fn takeover_enabled_for(takeover: &ProxyTakeoverStatus, app_type: &AppType) -> bool {
+    // 和 `commands/failover.rs` 的同名闸门一致：已删 harness 不再有接管状态。
     match app_type {
         AppType::Claude => takeover.claude,
         AppType::Codex => takeover.codex,
-        AppType::Gemini => takeover.gemini,
-        AppType::OpenCode | AppType::Hermes | AppType::OpenClaw | AppType::Pi => false,
+        AppType::Gemini | AppType::OpenCode | AppType::Hermes | AppType::OpenClaw | AppType::Pi => {
+            false
+        }
     }
 }

@@ -222,7 +222,7 @@ impl Database {
         Ok(max.map(|value| (value + 1) as usize).unwrap_or(0))
     }
 
-    /// 启动时补齐上游官方预设供应商（Claude / Codex / Gemini）。
+    /// 启动时补齐上游官方预设供应商（Claude / Codex）。
     pub fn init_default_official_providers(&self) -> Result<usize, AppError> {
         if self
             .get_bool_flag("official_providers_seeded")

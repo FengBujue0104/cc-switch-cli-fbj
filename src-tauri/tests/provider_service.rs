@@ -1478,7 +1478,7 @@ fn packycode_partner_meta_triggers_security_flag_even_without_keywords() {
 }
 
 #[test]
-fn switch_google_official_gemini_sets_oauth_security() {
+fn switch_google_official_gemini_sets_oauth_security_without_touching_live_dir() {
     let _guard = lock_test_mutex();
     reset_test_fs();
     let home = ensure_test_home();
@@ -1529,27 +1529,27 @@ fn switch_google_official_gemini_sets_oauth_security() {
         "Google official Gemini should set oauth-personal selectedType in app settings"
     );
 
+    // Gemini 已从本构建移除：原先"把 oauth-personal 同步进 ~/.gemini/settings.json"
+    // 的那一半收窄成"一个字节都不能写"；上面这半（cc-switch 自己的 settings.json）
+    // 照旧生效。
     let gemini_settings = home.join(".gemini").join("settings.json");
-    assert!(
-        gemini_settings.exists(),
-        "Gemini settings.json should exist at {}",
-        gemini_settings.display()
-    );
-    let gemini_raw = std::fs::read_to_string(&gemini_settings).expect("read gemini settings");
-    let gemini_value: serde_json::Value =
-        serde_json::from_str(&gemini_raw).expect("parse gemini settings");
 
     assert_eq!(
-        gemini_value
-            .pointer("/security/auth/selectedType")
-            .and_then(|v| v.as_str()),
-        Some("oauth-personal"),
-        "Gemini settings json should also reflect oauth-personal"
+        std::fs::read(&gemini_settings).ok(),
+        None,
+        "Gemini is not shipped in this build: switching must not create ~/.gemini/settings.json"
+    );
+    assert_eq!(
+        std::fs::read_dir(home.join(".gemini"))
+            .expect("read ~/.gemini")
+            .count(),
+        0,
+        "gemini live dir must stay empty"
     );
 }
 
 #[test]
-fn switch_gemini_merges_existing_settings_preserving_mcp_servers() {
+fn switch_gemini_leaves_existing_live_settings_byte_identical() {
     let _guard = lock_test_mutex();
     reset_test_fs();
     let home = ensure_test_home();
@@ -1562,11 +1562,9 @@ fn switch_gemini_merges_existing_settings_preserving_mcp_servers() {
             "keep": { "command": "echo" }
         }
     });
-    std::fs::write(
-        &gemini_settings_path,
-        serde_json::to_string_pretty(&existing_settings).expect("serialize existing settings"),
-    )
-    .expect("seed existing gemini settings.json");
+    let seeded =
+        serde_json::to_string_pretty(&existing_settings).expect("serialize existing settings");
+    std::fs::write(&gemini_settings_path, &seeded).expect("seed existing gemini settings.json");
 
     let mut config = MultiAppConfig::default();
     {
@@ -1615,20 +1613,13 @@ fn switch_gemini_merges_existing_settings_preserving_mcp_servers() {
     ProviderService::switch(&state, AppType::Gemini, "new")
         .expect("switching to new gemini provider should succeed");
 
+    // Gemini 已从本构建移除，`~/.gemini/settings.json` 不再被合并写入：原先
+    // "mcpServers 保留 + provider config 合并"的断言，现在由"文件逐字节不变"来
+    // 表达——两者对用户的净效果一样，都是这份 mcpServers 还在。
     let raw = std::fs::read_to_string(&gemini_settings_path).expect("read gemini settings.json");
-    let value: serde_json::Value = serde_json::from_str(&raw).expect("parse gemini settings.json");
-
     assert_eq!(
-        value
-            .pointer("/mcpServers/keep/command")
-            .and_then(|v| v.as_str()),
-        Some("echo"),
-        "switch should preserve existing mcpServers entries in Gemini settings.json, got: {raw}"
-    );
-    assert_eq!(
-        value.pointer("/ccSwitchTestKey").and_then(|v| v.as_str()),
-        Some("new"),
-        "switch should merge provider config into existing Gemini settings.json, got: {raw}"
+        raw, seeded,
+        "gemini live settings.json must stay byte-identical: gemini is not part of this build"
     );
 }
 
@@ -1849,6 +1840,7 @@ fn provider_service_switch_missing_provider_returns_error() {
 }
 
 #[test]
+#[ignore = "OpenClaw harness removed from this build: additive live-config membership no longer applies to it"]
 fn provider_service_switch_openclaw_syncs_only_target_entry() {
     let _guard = lock_test_mutex();
     reset_test_fs();
@@ -2328,10 +2320,33 @@ fn provider_service_sync_current_to_live_openclaw_ignores_blank_model_ids_in_liv
 }
 
 #[test]
-fn provider_service_sync_openclaw_to_live_skips_db_only_providers() {
+fn provider_service_sync_openclaw_to_live_writes_nothing_after_removal() {
     let _guard = lock_test_mutex();
     reset_test_fs();
     let home = ensure_test_home();
+
+    // OpenClaw 已从本构建移除：`sync_openclaw_to_live` 在 `should_sync_live` 关口
+    // 一律返回，所以既不是"只跳过 DB-only 供应商"，而是 live 目录一个字节都不能动
+    // （连 live_config_managed = true 的 keep 也不写）。原名
+    // `provider_service_sync_openclaw_to_live_skips_db_only_providers` 描述的是本
+    // 构建不再做出的区分，故改名；断言本身比原来更强。
+    let openclaw_dir = home.join(".openclaw");
+    std::fs::create_dir_all(&openclaw_dir).expect("create openclaw live dir");
+    let openclaw_path = openclaw_dir.join("openclaw.json");
+    let live_before = r#"{
+  models: {
+    mode: 'merge',
+    providers: {
+      keep: {
+        apiKey: 'sk-keep',
+        baseUrl: 'https://keep.example/v1',
+        models: [{ id: 'keep-model' }],
+      },
+    },
+  },
+}
+"#;
+    std::fs::write(&openclaw_path, live_before).expect("seed taken-over openclaw live config");
 
     let mut config = MultiAppConfig::default();
     {
@@ -2377,19 +2392,16 @@ fn provider_service_sync_openclaw_to_live_skips_db_only_providers() {
     ProviderService::sync_openclaw_to_live(&state)
         .expect("sync_openclaw_to_live should skip explicit DB-only providers");
 
-    let openclaw_path = home.join(".openclaw").join("openclaw.json");
-    let live_after = read_openclaw_live_config_json5(&openclaw_path);
-    let providers = live_after["models"]["providers"]
-        .as_object()
-        .expect("openclaw live config should contain providers map");
-    assert!(providers.get("keep").is_some());
-    assert!(
-        providers.get("saved-only").is_none(),
-        "sync_openclaw_to_live should not write DB-only providers back into live config"
+    let live_after = std::fs::read_to_string(&openclaw_path)
+        .expect("openclaw live config must survive the sync untouched");
+    assert_eq!(
+        live_after, live_before,
+        "OpenClaw is not shipped in this build: neither the managed nor the DB-only provider may be written back"
     );
 }
 
 #[test]
+#[ignore = "OpenClaw harness removed from this build: additive live-config membership no longer applies to it"]
 fn provider_service_update_saved_only_openclaw_does_not_add_to_live_config() {
     let _guard = lock_test_mutex();
     reset_test_fs();
@@ -2508,6 +2520,7 @@ fn provider_service_update_saved_only_openclaw_does_not_add_to_live_config() {
 }
 
 #[test]
+#[ignore = "OpenClaw harness removed from this build: additive live-config membership no longer applies to it"]
 fn provider_service_update_db_only_openclaw_ignores_unreadable_live_membership() {
     let _guard = lock_test_mutex();
     reset_test_fs();
@@ -2598,6 +2611,7 @@ fn provider_service_update_db_only_openclaw_ignores_unreadable_live_membership()
 }
 
 #[test]
+#[ignore = "OpenClaw harness removed from this build: additive live-config membership no longer applies to it"]
 fn provider_service_update_saved_only_openclaw_rejects_unreadable_live_membership() {
     let _guard = lock_test_mutex();
     reset_test_fs();
@@ -3377,6 +3391,7 @@ fn provider_service_update_openclaw_allows_default_model_refs_to_dangle() {
 }
 
 #[test]
+#[ignore = "OpenClaw harness removed from this build: additive live-config membership no longer applies to it"]
 fn provider_service_import_default_openclaw_skips_additive_mode() {
     let _guard = lock_test_mutex();
     reset_test_fs();
@@ -4431,6 +4446,7 @@ fn provider_service_delete_claude_removes_provider_files() {
 }
 
 #[test]
+#[ignore = "OpenClaw harness removed from this build: additive live-config membership no longer applies to it"]
 fn provider_service_delete_openclaw_removes_provider_from_live_and_state() {
     let _guard = lock_test_mutex();
     reset_test_fs();
@@ -4524,6 +4540,7 @@ fn provider_service_delete_openclaw_removes_provider_from_live_and_state() {
 }
 
 #[test]
+#[ignore = "OpenClaw harness removed from this build: additive live-config membership no longer applies to it"]
 fn provider_service_delete_openclaw_default_provider_allows_dangling_default_model() {
     let _guard = lock_test_mutex();
     reset_test_fs();
@@ -4604,6 +4621,7 @@ fn provider_service_delete_openclaw_default_provider_allows_dangling_default_mod
 }
 
 #[test]
+#[ignore = "OpenClaw harness removed from this build: additive live-config membership no longer applies to it"]
 fn provider_service_delete_openclaw_provider_referenced_only_by_fallback_allows_dangling_default_model(
 ) {
     let _guard = lock_test_mutex();
@@ -4685,6 +4703,7 @@ fn provider_service_delete_openclaw_provider_referenced_only_by_fallback_allows_
 }
 
 #[test]
+#[ignore = "OpenClaw harness removed from this build: additive live-config membership no longer applies to it"]
 fn provider_service_switch_openclaw_ignores_unrelated_mcp_sync_failures() {
     let _guard = lock_test_mutex();
     reset_test_fs();
@@ -5068,17 +5087,14 @@ fn provider_service_sync_current_to_live_writes_active_codex_prompt_file() {
 }
 
 #[test]
-fn provider_service_sync_current_to_live_writes_active_claude_and_gemini_prompt_files() {
+fn provider_service_sync_current_to_live_writes_active_claude_prompt_file() {
     let _guard = lock_test_mutex();
     reset_test_fs();
     let home = ensure_test_home();
     std::fs::create_dir_all(home.join(".claude")).expect("create claude dir");
-    std::fs::create_dir_all(home.join(".gemini")).expect("create gemini dir");
 
-    let config = config_with_prompt_entries(&[
-        (&AppType::Claude, "claude-active", "# claude prompt", true),
-        (&AppType::Gemini, "gemini-active", "# gemini prompt", true),
-    ]);
+    let config =
+        config_with_prompt_entries(&[(&AppType::Claude, "claude-active", "# claude prompt", true)]);
     let state = state_from_config(config);
 
     ProviderService::sync_current_to_live(&state).expect("sync current to live");
@@ -5087,11 +5103,6 @@ fn provider_service_sync_current_to_live_writes_active_claude_and_gemini_prompt_
         std::fs::read_to_string(home.join(".claude").join("CLAUDE.md"))
             .expect("read claude prompt"),
         "# claude prompt"
-    );
-    assert_eq!(
-        std::fs::read_to_string(home.join(".gemini").join("GEMINI.md"))
-            .expect("read gemini prompt"),
-        "# gemini prompt"
     );
 }
 

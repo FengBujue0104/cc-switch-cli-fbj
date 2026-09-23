@@ -238,15 +238,6 @@ pub(crate) fn render_overlay(
         Overlay::McpTypePicker { selected } => {
             super::pickers::render_mcp_type_picker_overlay(frame, content_area, theme, *selected)
         }
-        Overlay::VisibleAppsPicker { selected, apps } => {
-            super::pickers::render_visible_apps_picker_overlay(
-                frame,
-                content_area,
-                theme,
-                *selected,
-                apps,
-            )
-        }
         Overlay::SkillsAppsPicker {
             name,
             selected,
@@ -272,23 +263,6 @@ pub(crate) fn render_overlay(
             *selected_idx,
             selected,
         ),
-        Overlay::SkillsSyncMethodPicker { selected } => {
-            super::pickers::render_skills_sync_method_picker_overlay(
-                frame,
-                data,
-                content_area,
-                theme,
-                *selected,
-            )
-        }
-        Overlay::SkillsStorageLocationPicker { selected } => {
-            super::pickers::render_skills_storage_location_picker_overlay(
-                frame,
-                content_area,
-                theme,
-                *selected,
-            )
-        }
         Overlay::McpKeyValuePicker { kind, selected } => {
             super::mcp_key_value::render_mcp_key_value_picker_overlay(
                 frame,

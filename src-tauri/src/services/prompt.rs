@@ -640,7 +640,7 @@ mod tests {
     use crate::services::ProxyService;
     use serial_test::serial;
     use std::ffi::OsString;
-    use std::path::Path;
+    use std::path::PathBuf;
     use std::sync::{Arc, RwLock};
     use tempfile::TempDir;
 
@@ -649,6 +649,7 @@ mod tests {
         dir: TempDir,
         _lock: crate::test_support::TestHomeSettingsLock,
         old_home: Option<OsString>,
+        old_test_home_override: Option<PathBuf>,
         old_userprofile: Option<OsString>,
         old_config_dir: Option<OsString>,
     }
@@ -658,6 +659,7 @@ mod tests {
             let dir = TempDir::new().expect("create temp home");
             let lock = crate::test_support::lock_test_home_and_settings();
             let old_home = std::env::var_os("HOME");
+            let old_test_home_override = crate::test_support::test_home_override();
             let old_userprofile = std::env::var_os("USERPROFILE");
             let old_config_dir = std::env::var_os("CC_SWITCH_CONFIG_DIR");
 
@@ -671,6 +673,7 @@ mod tests {
                 dir,
                 _lock: lock,
                 old_home,
+                old_test_home_override,
                 old_userprofile,
                 old_config_dir,
             }
@@ -691,7 +694,7 @@ mod tests {
                 Some(value) => std::env::set_var("CC_SWITCH_CONFIG_DIR", value),
                 None => std::env::remove_var("CC_SWITCH_CONFIG_DIR"),
             }
-            crate::test_support::set_test_home_override(self.old_home.as_deref().map(Path::new));
+            crate::test_support::set_test_home_override(self.old_test_home_override.as_deref());
             crate::settings::reload_test_settings();
         }
     }

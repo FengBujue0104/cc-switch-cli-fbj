@@ -20,16 +20,14 @@ pub(super) fn render_skills_installed(
 
     let visible = skills_installed_filtered(app, data);
 
-    let header = Row::new(vec![
-        Cell::from(texts::header_name()),
-        Cell::from(crate::app_config::AppType::Claude.as_str()),
-        Cell::from(crate::app_config::AppType::Codex.as_str()),
-        Cell::from(crate::app_config::AppType::Gemini.as_str()),
-        Cell::from(crate::app_config::AppType::OpenCode.as_str()),
-        Cell::from(crate::app_config::AppType::Hermes.as_str()),
-        Cell::from(crate::app_config::AppType::Pi.as_str()),
-    ])
-    .style(Style::default().fg(theme.dim).add_modifier(Modifier::BOLD));
+    // 表头/单元格/摘要全部由同一份 harness 清单驱动（`supported_skill_apps()`）。
+    // 硬编码列名会让已删的 Gemini/OpenCode 从这张表里复活。
+    let columns = crate::services::SkillService::supported_skill_apps().collect::<Vec<_>>();
+
+    let mut header = vec![Cell::from(texts::header_name())];
+    header.extend(columns.iter().map(|app| Cell::from(app.as_str())));
+    let header =
+        Row::new(header).style(Style::default().fg(theme.dim).add_modifier(Modifier::BOLD));
 
     let rows = visible.iter().map(|skill| {
         let display_name = skill_display_name(&skill.name, &skill.directory);
@@ -38,33 +36,30 @@ pub(super) fn render_skills_installed(
         } else {
             display_name.to_string()
         };
-        Row::new(vec![
-            Cell::from(display_name),
-            Cell::from(skill_marker(skill.apps.claude)),
-            Cell::from(skill_marker(skill.apps.codex)),
-            Cell::from(skill_marker(skill.apps.gemini)),
-            Cell::from(skill_marker(skill.apps.opencode)),
-            Cell::from(skill_marker(skill.apps.hermes)),
-            Cell::from(skill_marker(skill.apps.pi)),
-        ])
+        let mut cells = vec![Cell::from(display_name)];
+        cells.extend(
+            columns
+                .iter()
+                .map(|app| Cell::from(skill_marker(skill.apps.is_enabled_for(app)))),
+        );
+        Row::new(cells)
     });
 
-    let table = Table::new(
-        rows,
-        [
-            Constraint::Percentage(50),
-            Constraint::Length(8),
-            Constraint::Length(8),
-            Constraint::Length(8),
-            Constraint::Length(10),
-            Constraint::Length(8),
-            Constraint::Length(5),
-        ],
-    )
-    .header(header)
-    .block(Block::default().borders(Borders::NONE))
-    .row_highlight_style(selection_style(theme))
-    .highlight_symbol(highlight_symbol(theme));
+    // 第一列吃掉剩余宽度，每个 harness 一列固定宽度。
+    let mut widths = vec![Constraint::Percentage(50)];
+    widths.extend(columns.iter().map(|app| {
+        if app.as_str().len() <= 5 {
+            Constraint::Length(5)
+        } else {
+            Constraint::Length(8)
+        }
+    }));
+
+    let table = Table::new(rows, widths)
+        .header(header)
+        .block(Block::default().borders(Borders::NONE))
+        .row_highlight_style(selection_style(theme))
+        .highlight_symbol(highlight_symbol(theme));
 
     if data.skills.installed.is_empty() {
         render_empty_state(
@@ -83,46 +78,20 @@ pub(super) fn render_skills_installed(
 }
 
 fn installed_summary(app: &App, data: &UiData) -> String {
-    let enabled_claude = data
-        .skills
-        .installed
-        .iter()
-        .filter(|s| s.apps.claude)
-        .count();
-    let enabled_codex = data
-        .skills
-        .installed
-        .iter()
-        .filter(|s| s.apps.codex)
-        .count();
-    let enabled_gemini = data
-        .skills
-        .installed
-        .iter()
-        .filter(|s| s.apps.gemini)
-        .count();
-    let enabled_opencode = data
-        .skills
-        .installed
-        .iter()
-        .filter(|s| s.apps.opencode)
-        .count();
-    let enabled_hermes = data
-        .skills
-        .installed
-        .iter()
-        .filter(|s| s.apps.hermes)
-        .count();
-    let enabled_pi = data.skills.installed.iter().filter(|s| s.apps.pi).count();
+    // 摘要与表头共用 `supported_skill_apps()`，加减 harness 时不会脱节。
+    let counts = crate::services::SkillService::supported_skill_apps()
+        .map(|app_type| {
+            let count = data
+                .skills
+                .installed
+                .iter()
+                .filter(|s| s.apps.is_enabled_for(&app_type))
+                .count();
+            (app_type.display_name(), count)
+        })
+        .collect::<Vec<_>>();
 
-    let counts = texts::tui_skills_installed_counts(
-        enabled_claude,
-        enabled_codex,
-        enabled_gemini,
-        enabled_opencode,
-        enabled_hermes,
-        enabled_pi,
-    );
+    let counts = texts::tui_skills_installed_counts(&counts);
     if app.skill_updates.is_empty() {
         counts
     } else {

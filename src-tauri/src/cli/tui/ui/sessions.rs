@@ -105,16 +105,31 @@ pub(super) fn render_sessions(
 const TIME_COLUMN_WIDTH: u16 = 10;
 /// Fixed width of the cost column: `$999.99` plus two columns of slack.
 const COST_COLUMN_WIDTH: u16 = 9;
+/// Blank cells separating two columns (`Table::column_spacing`).
+const SESSION_COLUMN_SPACING: u16 = 2;
+/// Narrowest Title cell that still reads as a session name.
+const SESSION_TITLE_MIN_WIDTH: u16 = 12;
 
-/// Column visibility for the session list at a given pane width.
+/// Column visibility for the session list at a given table width.
 ///
 /// Degradation order is Title > Time > Cost. Title never leaves because it is
 /// the only cell that identifies a row. Cost drops first: the Overview pane
 /// shows the estimate for the selected session anyway, while Time is
 /// the only per-row ordering cue the list itself provides.
+///
+/// `width` 是表格真正拿到的宽度（pane 内缩 `CONTENT_INSET_LEFT` 之后），两个阈值都按
+/// "扣掉 Time / Cost 和列间距之后 Title 还剩多少"来算。nav 精简成 4 项之后左侧导航窄
+/// 了 9 列，80 列终端的会话列表刚好翻过旧的 Cost 阈值，把 Title 挤到 7 个字符；宁可少
+/// 一列，也不能让标题认不出是哪一条会话。
 fn session_list_columns(width: u16) -> (bool, bool) {
-    let show_cost = width >= 30;
-    let show_time = width >= 19;
+    let title_with_time = SESSION_TITLE_MIN_WIDTH
+        .saturating_add(SESSION_COLUMN_SPACING)
+        .saturating_add(TIME_COLUMN_WIDTH);
+    let title_with_time_and_cost = title_with_time
+        .saturating_add(SESSION_COLUMN_SPACING)
+        .saturating_add(COST_COLUMN_WIDTH);
+    let show_time = width >= title_with_time;
+    let show_cost = width >= title_with_time_and_cost;
     (show_time, show_cost)
 }
 
@@ -221,10 +236,12 @@ fn render_session_list(
         return;
     }
 
-    // The enlarged pane leaves room for all three columns on a standard
-    // 80-column terminal. Below that the columns are dropped in priority order
-    // (see `session_list_columns`): Title always stays, Time outranks Cost.
-    let (show_time, show_cost) = session_list_columns(inner.width);
+    // A wide pane leaves room for all three columns; below that they go in
+    // priority order (see `session_list_columns`): Title always stays, Time
+    // outranks Cost. On a standard 80-column terminal Cost already yields so
+    // the Title stays whole.
+    let table_area = inset_horizontal(inner, CONTENT_INSET_LEFT);
+    let (show_time, show_cost) = session_list_columns(table_area.width);
     let mut header_cells = vec![Cell::from(texts::tui_sessions_header_title())];
     if show_time {
         header_cells.push(Cell::from(
@@ -321,11 +338,7 @@ fn render_session_list(
     if app.sessions.pagination.is_row_focused() {
         state.select(Some(selected - start));
     }
-    frame.render_stateful_widget(
-        table,
-        inset_horizontal(inner, CONTENT_INSET_LEFT),
-        &mut state,
-    );
+    frame.render_stateful_widget(table, table_area, &mut state);
 }
 
 fn render_session_detail(
@@ -1016,14 +1029,46 @@ mod tests {
 
     #[test]
     fn narrow_session_list_drops_cost_before_time_and_never_the_title() {
-        // Below the Time threshold only the flexible Title column survives.
+        // 阈值按表格宽度算：Title 至少要留下 SESSION_TITLE_MIN_WIDTH。
+        // Below that only the flexible Title column survives.
         assert_eq!(session_list_columns(0), (false, false));
-        assert_eq!(session_list_columns(18), (false, false));
+        assert_eq!(
+            session_list_columns(
+                SESSION_TITLE_MIN_WIDTH + SESSION_COLUMN_SPACING + TIME_COLUMN_WIDTH - 1
+            ),
+            (false, false)
+        );
         // Time comes back first...
-        assert_eq!(session_list_columns(19), (true, false));
-        assert_eq!(session_list_columns(29), (true, false));
-        // ...and Cost only once the pane can hold all three.
-        assert_eq!(session_list_columns(30), (true, true));
+        assert_eq!(
+            session_list_columns(
+                SESSION_TITLE_MIN_WIDTH + SESSION_COLUMN_SPACING + TIME_COLUMN_WIDTH
+            ),
+            (true, false)
+        );
+        // ...and Cost only once the Title still keeps its minimum beside them:
+        // a standard 80-column terminal lands here (table width 30), so Cost is
+        // the column that yields.
+        assert_eq!(
+            session_list_columns(
+                SESSION_TITLE_MIN_WIDTH
+                    + SESSION_COLUMN_SPACING
+                    + TIME_COLUMN_WIDTH
+                    + SESSION_COLUMN_SPACING
+                    + COST_COLUMN_WIDTH
+                    - 1
+            ),
+            (true, false)
+        );
+        assert_eq!(
+            session_list_columns(
+                SESSION_TITLE_MIN_WIDTH
+                    + SESSION_COLUMN_SPACING
+                    + TIME_COLUMN_WIDTH
+                    + SESSION_COLUMN_SPACING
+                    + COST_COLUMN_WIDTH
+            ),
+            (true, true)
+        );
         assert_eq!(session_list_columns(200), (true, true));
     }
 

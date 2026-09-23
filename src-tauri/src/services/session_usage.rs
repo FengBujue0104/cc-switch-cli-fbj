@@ -379,16 +379,12 @@ pub(crate) fn sync_all_session_usage_unlocked(
         "Codex",
         crate::services::session_usage_codex::sync_codex_usage(db),
     );
-    merge_sync_step(
-        &mut result,
-        "Gemini",
-        crate::services::session_usage_gemini::sync_gemini_usage(db),
-    );
-    merge_sync_step(
-        &mut result,
-        "OpenCode",
-        crate::services::session_usage_opencode::sync_opencode_usage(db),
-    );
+    // Gemini / OpenCode 已从本构建移除：它们的 importer 仍然编译（见
+    // `session_usage_gemini` / `session_usage_opencode`，以及 `cli/commands/sessions.rs`
+    // 里 `legacy-commands` 那一支），但不再进周期导入。否则每个周期都会去走
+    // `~/.gemini/tmp/*/chats` 与 `~/.local/share/opencode/opencode.db`，一次坏行还会把
+    // "Gemini 会话文件解析失败 …" 推到用户可见的同步错误里。库里既有的历史 usage 行不受
+    // 影响——这里只是不再导入新行。
     merge_sync_step(
         &mut result,
         "Pi",
@@ -2423,6 +2419,83 @@ mod tests {
         let cost_direct = CostCalculator::calculate(&usage, &direct, Decimal::from(1));
         let cost_cached = CostCalculator::calculate(&usage, &second, Decimal::from(1));
         assert_eq!(cost_direct.total_cost, cost_cached.total_cost);
+
+        Ok(())
+    }
+
+    /// 周期导入只覆盖保留的三个 harness：Gemini / OpenCode 的 importer 仍编译着
+    /// （`legacy-commands` 下的 `sessions` 子命令还会用），但不再进
+    /// `sync_all_session_usage_unlocked`。否则每个周期都会去扫
+    /// `~/.gemini/tmp/*/chats` 与 `~/.local/share/opencode/opencode.db`，一个坏行
+    /// 就会把 "Gemini 会话文件解析失败 …" / "OpenCode: 无法打开 opencode.db …"
+    /// 推到用户可见的同步错误里，已移除 harness 也就永远留着一条扫不完的尾巴。
+    ///
+    /// OpenCode 侧不能省：`sync_opencode_usage` 在文件不存在时提前返回 Ok(空)，
+    /// 光有 Gemini 探针钉不住 OpenCode 那一半，必须真的放一个打不开的 opencode.db。
+    ///
+    /// 用一个格式合法、内容非法的 Gemini 会话文件，加一个打不开的
+    /// opencode.db 做探针：只要对应步骤还在周期里，两者的错误聚合就必然报错，
+    /// 测试随之失败（都不依赖任何可选项，也就不需要构造可导入的合法数据）。
+    #[test]
+    fn periodic_sync_cycle_skips_removed_harness_usage_sources() -> Result<(), AppError> {
+        let home = tempfile::tempdir().expect("isolated test home");
+        let _env = crate::test_support::TestEnvGuard::isolated(home.path());
+
+        // 用生产代码自己的路径解析，保证探针落在 importer 真正会去看的地方；
+        // 同时断言它确实在测试 home 内，否则这个测试就会去写真实目录。
+        let gemini_dir = crate::gemini_config::get_gemini_dir();
+        assert!(
+            gemini_dir.starts_with(home.path()),
+            "gemini 目录必须解析到测试 home 内，实际 {:?}",
+            gemini_dir
+        );
+        let opencode_db = crate::opencode_config::get_opencode_db_path();
+        assert!(
+            opencode_db.starts_with(home.path()),
+            "opencode.db 必须解析到测试 home 内，实际 {:?}",
+            opencode_db
+        );
+
+        let gemini_chats = gemini_dir.join("tmp").join("project-hash").join("chats");
+        fs::create_dir_all(&gemini_chats).expect("seed gemini chats dir");
+        let broken_session = gemini_chats.join("session-broken.json");
+        fs::write(&broken_session, b"{ this is not a valid session file")
+            .expect("seed malformed gemini session file");
+
+        let opencode_dir = opencode_db.parent().expect("opencode.db parent");
+        fs::create_dir_all(opencode_dir).expect("seed opencode data dir");
+        fs::write(&opencode_db, b"this is not an opencode sqlite database")
+            .expect("seed unreadable opencode.db");
+
+        let db = Database::memory()?;
+        let result = sync_all_session_usage(&db)?;
+
+        for error in &result.errors {
+            assert!(
+                !error.contains("Gemini") && !error.contains("OpenCode"),
+                "已移除的 harness 不应出现在周期同步错误里: {error}"
+            );
+        }
+        let imported = lock_conn!(db.conn).query_row(
+            "SELECT COUNT(*) FROM proxy_request_logs
+             WHERE app_type IN ('gemini', 'opencode')",
+            [],
+            |row| row.get::<_, i64>(0),
+        )?;
+        assert_eq!(
+            imported, 0,
+            "周期导入不得把已移除 harness 的会话写进 usage 表"
+        );
+
+        // 顺带钉住只读语义：导入不会去"修"或删掉已移除 harness 目录里的文件。
+        assert_eq!(
+            fs::read_to_string(&broken_session).expect("gemini session file stays put"),
+            "{ this is not a valid session file"
+        );
+        assert_eq!(
+            fs::read(&opencode_db).expect("opencode.db stays put"),
+            b"this is not an opencode sqlite database"
+        );
 
         Ok(())
     }

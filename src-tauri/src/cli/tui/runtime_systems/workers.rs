@@ -3796,12 +3796,6 @@ fn skills_worker_loop(rx: mpsc::Receiver<SkillsReq>, tx: mpsc::Sender<SkillsMsg>
                             result: Err(err.clone()),
                         });
                     }
-                    SkillsReq::MigrateStorage { target } => {
-                        let _ = tx.send(SkillsMsg::StorageMigrated {
-                            target,
-                            result: Err(err.clone()),
-                        });
-                    }
                 }
             }
             return;
@@ -3840,12 +3834,6 @@ fn skills_worker_loop(rx: mpsc::Receiver<SkillsReq>, tx: mpsc::Sender<SkillsMsg>
                     }
                     SkillsReq::Update { .. } => {
                         let _ = tx.send(SkillsMsg::SkillsUpdated {
-                            result: Err(err.clone()),
-                        });
-                    }
-                    SkillsReq::MigrateStorage { target } => {
-                        let _ = tx.send(SkillsMsg::StorageMigrated {
-                            target,
                             result: Err(err.clone()),
                         });
                     }
@@ -3953,10 +3941,6 @@ fn skills_worker_loop(rx: mpsc::Receiver<SkillsReq>, tx: mpsc::Sender<SkillsMsg>
                 let result = Ok(rt.block_on(service.update_skills(&ids)));
                 let _ = tx.send(SkillsMsg::SkillsUpdated { result });
             }
-            SkillsReq::MigrateStorage { target } => {
-                let result = SkillService::migrate_storage(target).map_err(|e| e.to_string());
-                let _ = tx.send(SkillsMsg::StorageMigrated { target, result });
-            }
         }
     }
 }
@@ -3971,6 +3955,7 @@ mod tests {
     fn codex_history_worker_saves_disable_before_reporting_restore() {
         let home = tempfile::tempdir().expect("isolated test home");
         let _env = crate::test_support::TestEnvGuard::isolated(home.path());
+        crate::test_support::disable_unified_codex_session_history();
         let system = start_codex_history_system().expect("start Codex history worker");
 
         system

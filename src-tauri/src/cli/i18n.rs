@@ -626,9 +626,15 @@ pub mod texts {
                 "Providers: Space add/remove, Enter/e edit, a add, c copy, d delete, t test, r refresh, x enable"
             }
         } else if is_chinese() {
-            "供应商：Space 切换，Enter/e 编辑，a 新增，c 复制，d 删除，t 测试，r 刷新，o 临时启动(Claude/Codex)，f 管理故障转移(Claude/Codex/Gemini)，x 设为默认(OpenClaw)"
+            // 仅本分支可达的应用是 Claude/Codex：`f` 需要 supports_failover()，
+            // 而 `x 设为默认` 仅 OpenClaw/Hermes 有（Hermes 走上面的专属分支），
+            // 所以这里不再标注已移除的 harness。
+            "供应商：Space 切换，Enter/e 编辑，a 新增，c 复制，d 删除，t 测试，r 刷新，o 临时启动(Claude/Codex)，f 管理故障转移(Claude/Codex)"
         } else {
-            "Providers: Space switch, Enter/e edit, a add, c copy, d delete, t test, r refresh, o launch temp (Claude/Codex), f manage failover (Claude/Codex/Gemini), x set default (OpenClaw)"
+            // Only Claude/Codex reach this branch: `f` needs supports_failover(),
+            // and `x set default` is OpenClaw/Hermes-only (Hermes takes the branch
+            // above), so no removed harness is annotated here.
+            "Providers: Space switch, Enter/e edit, a add, c copy, d delete, t test, r refresh, o launch temp (Claude/Codex), f manage failover (Claude/Codex)"
         }
     }
 
@@ -876,119 +882,6 @@ pub mod texts {
             "正在刷新"
         } else {
             "Refreshing"
-        }
-    }
-
-    // ============================================
-    // HOME USAGE CHART (首页用量图表)
-    // ============================================
-
-    /// Card title; the range is appended with the shared `·` separator so
-    /// ASCII terminals get " Usage - 30d ".
-    pub fn tui_home_chart_card_title() -> &'static str {
-        if is_chinese() {
-            "用量"
-        } else {
-            "Usage"
-        }
-    }
-
-    pub fn tui_home_chart_card_range() -> &'static str {
-        if is_chinese() {
-            "近 30 天"
-        } else {
-            "30d"
-        }
-    }
-
-    /// Header of the models column inside the usage card.
-    pub fn tui_home_chart_list_title() -> &'static str {
-        if is_chinese() {
-            "模型花费"
-        } else {
-            "Models by Cost"
-        }
-    }
-
-    pub fn tui_home_chart_other() -> &'static str {
-        if is_chinese() {
-            "其他"
-        } else {
-            "Other"
-        }
-    }
-
-    pub fn tui_home_chart_live() -> &'static str {
-        if is_chinese() {
-            "实时"
-        } else {
-            "live"
-        }
-    }
-
-    pub fn tui_home_chart_last_updated(relative: &str) -> String {
-        if is_chinese() {
-            format!("最近更新 {relative}")
-        } else {
-            format!("Last updated: {relative}")
-        }
-    }
-
-    pub fn tui_home_chart_never_synced() -> &'static str {
-        if is_chinese() {
-            "尚未导入本地用量"
-        } else {
-            "no local import yet"
-        }
-    }
-
-    pub fn tui_home_chart_just_now() -> &'static str {
-        if is_chinese() {
-            "刚刚"
-        } else {
-            "just now"
-        }
-    }
-
-    pub fn tui_home_chart_minutes_ago(minutes: u64) -> String {
-        if is_chinese() {
-            format!("{minutes} 分钟前")
-        } else {
-            format!("{minutes}m ago")
-        }
-    }
-
-    pub fn tui_home_chart_hours_ago(hours: u64) -> String {
-        if is_chinese() {
-            format!("{hours} 小时前")
-        } else {
-            format!("{hours}h ago")
-        }
-    }
-
-    pub fn tui_home_chart_days_ago(days: u64) -> String {
-        if is_chinese() {
-            format!("{days} 天前")
-        } else {
-            format!("{days}d ago")
-        }
-    }
-
-    /// Empty state for apps that never import local session logs (Hermes,
-    /// OpenClaw): their usage can only come from proxy traffic.
-    pub fn tui_home_chart_empty_proxy_only() -> &'static str {
-        if is_chinese() {
-            "暂无用量：该应用仅统计代理流量"
-        } else {
-            "No usage yet - this app only records proxy traffic"
-        }
-    }
-
-    pub fn tui_home_chart_empty_pending() -> &'static str {
-        if is_chinese() {
-            "暂无用量：等待首次同步"
-        } else {
-            "No usage yet - first sync pending"
         }
     }
 
@@ -5820,23 +5713,14 @@ pub mod texts {
         }
     }
 
-    pub fn tui_skills_installed_counts(
-        claude: usize,
-        codex: usize,
-        gemini: usize,
-        opencode: usize,
-        hermes: usize,
-        pi: usize,
-    ) -> String {
-        if is_chinese() {
-            format!(
-                "Claude: {claude} · Codex: {codex} · Gemini: {gemini} · OpenCode: {opencode} · Hermes: {hermes} · Pi: {pi}"
-            )
-        } else {
-            format!(
-                "Claude: {claude} · Codex: {codex} · Gemini: {gemini} · OpenCode: {opencode} · Hermes: {hermes} · Pi: {pi}"
-            )
-        }
+    /// 已安装技能页摘要行。入参是 `(展示名, 已启用数)` 的序列，由调用方按
+    /// `supported_skill_apps()` 生成——摘要里出现哪个 harness 必须和表头同源。
+    pub fn tui_skills_installed_counts(counts: &[(&str, usize)]) -> String {
+        counts
+            .iter()
+            .map(|(label, count)| format!("{label}: {count}"))
+            .collect::<Vec<_>>()
+            .join(" · ")
     }
 
     pub fn tui_skills_update_marker() -> &'static str {
@@ -5871,21 +5755,19 @@ pub mod texts {
         }
     }
 
-    pub fn tui_mcp_server_counts(
-        claude: usize,
-        codex: usize,
-        gemini: usize,
-        opencode: usize,
-        hermes: usize,
-    ) -> String {
+    /// MCP 列表页摘要行。入参是 `(展示名, 已安装数)` 的序列，由调用方按
+    /// `McpService::supported_mcp_apps()` 生成——摘要里出现哪个 harness 必须
+    /// 和表头出现哪个 harness 同源，否则已删的 harness 会从这一行复活。
+    pub fn tui_mcp_server_counts(counts: &[(&str, usize)]) -> String {
+        let body = counts
+            .iter()
+            .map(|(label, count)| format!("{label}: {count}"))
+            .collect::<Vec<_>>()
+            .join(" · ");
         if is_chinese() {
-            format!(
-                "已安装 · Claude: {claude} · Codex: {codex} · Gemini: {gemini} · OpenCode: {opencode} · Hermes: {hermes}"
-            )
+            format!("已安装 · {body}")
         } else {
-            format!(
-                "Installed · Claude: {claude} · Codex: {codex} · Gemini: {gemini} · OpenCode: {opencode} · Hermes: {hermes}"
-            )
+            format!("Installed · {body}")
         }
     }
 

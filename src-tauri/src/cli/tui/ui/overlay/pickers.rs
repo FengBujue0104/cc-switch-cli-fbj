@@ -1,7 +1,6 @@
 use super::super::theme;
 use super::super::*;
 use super::frame::{overlay_frame, overlay_frame_at, OverlaySize};
-use crate::cli::tui::app::sync_method_picker_index;
 use crate::cli::tui::form;
 use crate::cli::tui::form::{ClaudeModelRole, HermesModelField, ProviderAddFormState};
 use crate::cli::tui::text_edit::TextInput;
@@ -2330,6 +2329,9 @@ pub(super) fn render_mcp_apps_picker_overlay(
     selected: usize,
     apps: &crate::app_config::McpApps,
 ) {
+    // 可选 harness 来自 `supported_mcp_apps()`：这里写死一份就是给已删的
+    // Gemini/OpenCode 留一个还能被用户勾上的入口。
+    let app_types = crate::services::McpService::supported_mcp_apps().collect::<Vec<_>>();
     render_apps_picker_overlay(
         frame,
         content_area,
@@ -2338,13 +2340,7 @@ pub(super) fn render_mcp_apps_picker_overlay(
         selected,
         apps,
         "Space",
-        &[
-            crate::app_config::AppType::Claude,
-            crate::app_config::AppType::Codex,
-            crate::app_config::AppType::Gemini,
-            crate::app_config::AppType::OpenCode,
-            crate::app_config::AppType::Hermes,
-        ],
+        &app_types,
     );
 }
 
@@ -2390,33 +2386,6 @@ pub(super) fn render_mcp_type_picker_overlay(
     frame.render_stateful_widget(list, body_area, &mut state);
 }
 
-pub(super) fn render_visible_apps_picker_overlay(
-    frame: &mut Frame<'_>,
-    content_area: Rect,
-    theme: &theme::Theme,
-    selected: usize,
-    apps: &crate::settings::VisibleApps,
-) {
-    render_apps_picker_overlay(
-        frame,
-        content_area,
-        theme,
-        texts::tui_settings_visible_apps_title().to_string(),
-        selected,
-        apps,
-        "Space",
-        &[
-            crate::app_config::AppType::Claude,
-            crate::app_config::AppType::Codex,
-            crate::app_config::AppType::Gemini,
-            crate::app_config::AppType::OpenCode,
-            crate::app_config::AppType::Hermes,
-            crate::app_config::AppType::OpenClaw,
-            crate::app_config::AppType::Pi,
-        ],
-    );
-}
-
 pub(super) fn render_skills_apps_picker_overlay(
     frame: &mut Frame<'_>,
     content_area: Rect,
@@ -2425,6 +2394,8 @@ pub(super) fn render_skills_apps_picker_overlay(
     selected: usize,
     apps: &crate::app_config::SkillApps,
 ) {
+    // 同上：可选 harness 来自 `supported_skill_apps()`（== `AppType::all()`）。
+    let app_types = crate::services::SkillService::supported_skill_apps().collect::<Vec<_>>();
     render_apps_picker_overlay(
         frame,
         content_area,
@@ -2433,14 +2404,7 @@ pub(super) fn render_skills_apps_picker_overlay(
         selected,
         apps,
         "Space",
-        &[
-            crate::app_config::AppType::Claude,
-            crate::app_config::AppType::Codex,
-            crate::app_config::AppType::Gemini,
-            crate::app_config::AppType::OpenCode,
-            crate::app_config::AppType::Hermes,
-            crate::app_config::AppType::Pi,
-        ],
+        &app_types,
     );
 }
 
@@ -2524,104 +2488,6 @@ pub(super) fn render_skills_import_picker_overlay(
     let mut state = TableState::default();
     state.select(Some(selected_idx));
     frame.render_stateful_widget(table, body_area, &mut state);
-}
-
-pub(super) fn render_skills_sync_method_picker_overlay(
-    frame: &mut Frame<'_>,
-    data: &UiData,
-    content_area: Rect,
-    theme: &theme::Theme,
-    selected: usize,
-) {
-    let methods = [
-        crate::services::skill::SyncMethod::Symlink,
-        crate::services::skill::SyncMethod::Copy,
-    ];
-
-    let body_area = overlay_frame(
-        frame,
-        content_area,
-        theme,
-        texts::tui_skills_sync_method_title(),
-        &[
-            ("↑↓", texts::tui_key_select()),
-            ("Enter", texts::tui_key_apply()),
-            ("Esc", texts::tui_key_cancel()),
-        ],
-        OverlaySize::FitRows {
-            width: OVERLAY_FIXED_LG.0,
-            body_rows: methods.len() as u16,
-        },
-        overlay_border_style(theme, false),
-    );
-
-    let current = sync_method_picker_index(data.skills.sync_method);
-
-    let items = methods.into_iter().enumerate().map(|(index, method)| {
-        let marker = if index == current {
-            texts::tui_marker_active()
-        } else {
-            texts::tui_marker_inactive()
-        };
-        ListItem::new(Line::from(Span::raw(format!(
-            "{marker}  {}",
-            texts::tui_skills_sync_method_name(method)
-        ))))
-    });
-
-    let list = List::new(items)
-        .highlight_style(selection_style(theme))
-        .highlight_symbol(highlight_symbol(theme));
-
-    let mut state = ListState::default();
-    state.select(Some(selected));
-    frame.render_stateful_widget(list, body_area, &mut state);
-}
-
-pub(super) fn render_skills_storage_location_picker_overlay(
-    frame: &mut Frame<'_>,
-    content_area: Rect,
-    theme: &theme::Theme,
-    selected: usize,
-) {
-    let locations = [
-        crate::services::skill::SkillStorageLocation::CcSwitch,
-        crate::services::skill::SkillStorageLocation::Unified,
-    ];
-    let body_area = overlay_frame(
-        frame,
-        content_area,
-        theme,
-        texts::tui_skills_storage_location_title(),
-        &[
-            ("↑↓", texts::tui_key_select()),
-            ("Enter", texts::tui_key_apply()),
-            ("Esc", texts::tui_key_cancel()),
-        ],
-        OverlaySize::FitRows {
-            width: OVERLAY_FIXED_LG.0,
-            body_rows: locations.len() as u16,
-        },
-        overlay_border_style(theme, false),
-    );
-    let current = crate::settings::get_skill_storage_location();
-    let items = locations.into_iter().map(|location| {
-        let marker = if location == current {
-            texts::tui_marker_active()
-        } else {
-            texts::tui_marker_inactive()
-        };
-        ListItem::new(Line::from(Span::raw(format!(
-            "{marker}  {}",
-            texts::tui_skills_storage_location_name(location)
-        ))))
-    });
-    let list = List::new(items)
-        .highlight_style(selection_style(theme))
-        .highlight_symbol(highlight_symbol(theme));
-    let mut state = ListState::default();
-    state.select(Some(selected));
-    frame.render_stateful_widget(list, body_area, &mut state);
 }
 
 #[expect(

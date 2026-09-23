@@ -8,7 +8,6 @@ use crate::services::ProviderService;
 use crate::store::AppState;
 use crate::AppType;
 use serde_json::{json, Map, Value};
-use std::str::FromStr;
 
 /// Import a provider from a deep link request.
 pub fn import_provider_from_deeplink(
@@ -22,12 +21,16 @@ pub fn import_provider_from_deeplink(
         )));
     }
 
-    let mut merged_request = parse_and_merge_config(&request)?;
-
-    let app_str = merged_request
+    let app_str = request
         .app
         .clone()
         .ok_or_else(|| AppError::InvalidInput("Missing 'app' field for provider".to_string()))?;
+
+    // Gate before anything else so a removed harness never reaches the in-memory
+    // merge stage, let alone `ProviderService::add` (which writes live config).
+    let app_type = super::parse_deeplink_app(&app_str, "provider")?;
+
+    let mut merged_request = parse_and_merge_config(&request)?;
 
     let api_key = merged_request.api_key.as_ref().ok_or_else(|| {
         AppError::InvalidInput("API key is required (either in URL or config file)".to_string())
@@ -65,8 +68,6 @@ pub fn import_provider_from_deeplink(
             merged_request.homepage = match merged_request.app.as_deref() {
                 Some("claude") => Some("https://anthropic.com".to_string()),
                 Some("codex") => Some("https://openai.com".to_string()),
-                Some("gemini") => Some("https://ai.google.dev".to_string()),
-                Some("opencode") => Some("https://opencode.ai".to_string()),
                 Some("hermes") => Some("https://hermes.sh".to_string()),
                 _ => None,
             };
@@ -87,9 +88,6 @@ pub fn import_provider_from_deeplink(
         .name
         .clone()
         .ok_or_else(|| AppError::InvalidInput("Missing 'name' field for provider".to_string()))?;
-
-    let app_type = AppType::from_str(&app_str)
-        .map_err(|_| AppError::InvalidInput(format!("Invalid app type: {app_str}")))?;
 
     let mut provider = build_provider_from_request(&app_type, &merged_request)?;
 
@@ -839,5 +837,71 @@ wire_api = "responses"
         merge_codex_config(&mut request, &config).expect("merge config");
 
         assert_eq!(request.endpoint, None);
+    }
+
+    /// OpenClaw 已删，`app=openclaw` 的链接再也到不了这里。但
+    /// `canonicalize_openclaw_config` 校验的 schema（`OpenClawProviderConfig`）
+    /// 还在，`parse_and_merge_config` 也还是 `pub`，所以这三条原来挂在
+    /// `tests/deeplink_import.rs` 的拒绝用例改成直接打这个函数——覆盖率不丢，
+    /// 同时不会再暗示"openclaw 链接是可用的"。
+    #[test]
+    fn canonicalize_openclaw_config_rejects_legacy_aliases() {
+        let cases: &[(&str, &str)] = &[
+            (
+                "legacy alias fields (api_key, base_url, options)",
+                r#"{"api_key":"sk-legacy","base_url":"https://legacy.example/v1","options":{"apiKey":"sk-alias","baseURL":"https://alias.example/v1"},"models":[{"id":"m"}]}"#,
+            ),
+            (
+                "legacy context_window alias on model",
+                r#"{"apiKey":"sk","baseUrl":"https://example.com/v1","models":[{"id":"m","context_window":128000}]}"#,
+            ),
+        ];
+
+        for (label, config_json) in cases {
+            let config: Value = serde_json::from_str(config_json).expect("parse config json");
+            let err = canonicalize_openclaw_config(&config)
+                .expect_err(&format!("[{label}] should be rejected"));
+            assert!(
+                err.to_string().contains("legacy alias keys"),
+                "[{label}] expected legacy-alias rejection, got: {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn canonicalize_openclaw_config_rejects_non_object_models() {
+        let config = json!({
+            "apiKey": "sk",
+            "baseUrl": "https://example.com/v1",
+            "models": {"id": "m"}
+        });
+
+        let err =
+            canonicalize_openclaw_config(&config).expect_err("models as object must be rejected");
+        assert!(
+            err.to_string().contains("invalid OpenClaw provider schema"),
+            "unexpected error: {err}"
+        );
+    }
+
+    /// 合法 inline config 仍然能过 schema 校验（字段原样保留）。
+    #[test]
+    fn canonicalize_openclaw_config_preserves_canonical_fields() {
+        let config = json!({
+            "apiKey": "sk-config-openclaw",
+            "baseUrl": "https://config.openclaw.example/v1",
+            "api": "openai",
+            "headers": {"X-Trace": "1"},
+            "models": [{"id": "config-model", "name": "Config Model", "contextWindow": 128000}]
+        });
+
+        let canonical = canonicalize_openclaw_config(&config).expect("canonical config is valid");
+
+        assert_eq!(canonical["apiKey"], "sk-config-openclaw");
+        assert_eq!(canonical["baseUrl"], "https://config.openclaw.example/v1");
+        assert_eq!(canonical["api"], "openai");
+        assert_eq!(canonical["headers"]["X-Trace"], "1");
+        assert_eq!(canonical["models"][0]["id"], "config-model");
+        assert_eq!(canonical["models"][0]["contextWindow"], 128000);
     }
 }

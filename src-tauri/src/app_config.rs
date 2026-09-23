@@ -47,24 +47,14 @@ impl McpApps {
     }
 
     /// 获取所有启用的应用列表
+    ///
+    /// 以 `AppType::all()` 为唯一来源：调用方拿这个列表决定"要去动哪些 live 配置"，
+    /// 已删的 Gemini/OpenCode 出现在这里就会让 MCP 重新往它们的 live 目录里写文件；
+    /// Pi 没有对应的 MCP 位（`is_enabled_for` 恒为 false），自然也出不来。
     pub fn enabled_apps(&self) -> Vec<AppType> {
-        let mut apps = Vec::new();
-        if self.claude {
-            apps.push(AppType::Claude);
-        }
-        if self.codex {
-            apps.push(AppType::Codex);
-        }
-        if self.gemini {
-            apps.push(AppType::Gemini);
-        }
-        if self.opencode {
-            apps.push(AppType::OpenCode);
-        }
-        if self.hermes {
-            apps.push(AppType::Hermes);
-        }
-        apps
+        AppType::all()
+            .filter(|app| self.is_enabled_for(app))
+            .collect()
     }
 
     /// 检查是否所有应用都未启用
@@ -333,15 +323,16 @@ impl AppType {
         }
     }
 
+    /// 追加式 live 配置语义（多供应商共存，而不是切换"当前"供应商）。
+    ///
+    /// 只覆盖本构建保留的 harness。已删的 OpenCode/OpenClaw 变体仍留在枚举里
+    /// 以便解析旧数据，但不再参与任何语义判断：它们的 live 配置不再被读取。
     pub fn is_additive_mode(&self) -> bool {
-        matches!(
-            self,
-            AppType::OpenCode | AppType::Hermes | AppType::OpenClaw | AppType::Pi
-        )
+        matches!(self, AppType::Hermes | AppType::Pi)
     }
 
     pub fn supports_failover(&self) -> bool {
-        matches!(self, AppType::Claude | AppType::Codex | AppType::Gemini)
+        matches!(self, AppType::Claude | AppType::Codex)
     }
 
     pub fn all() -> impl Iterator<Item = AppType> {
@@ -352,6 +343,23 @@ impl AppType {
             AppType::Pi,
         ]
         .into_iter()
+    }
+
+    /// 面向用户的展示名（表头、摘要行、按钮文案）。
+    ///
+    /// 用户可见的清单一律从 `AppType::all()` 派生后再用这个函数取标题，
+    /// 不要硬编码一份 `"Gemini" | "OpenCode" | ...` 的列表——那种列表就是
+    /// 已删 harness 复活最常见的位置。
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            AppType::Claude => "Claude",
+            AppType::Codex => "Codex",
+            AppType::Gemini => "Gemini",
+            AppType::OpenCode => "OpenCode",
+            AppType::Hermes => "Hermes",
+            AppType::OpenClaw => "OpenClaw",
+            AppType::Pi => "Pi",
+        }
     }
 }
 
@@ -376,11 +384,12 @@ impl FromStr for AppType {
             "pi" => Ok(AppType::Pi),
             other => Err(AppError::localized(
                 "unsupported_app",
+                // `from_str` itself still accepts the retired ids so that legacy
+                // stored data keeps loading, so the message says what this build
+                // supports rather than implying these are the only parseable ids.
+                format!("不支持的应用标识: '{other}'。此构建支持: claude, codex, hermes, pi。"),
                 format!(
-                    "不支持的应用标识: '{other}'。可选值: claude, codex, gemini, opencode, hermes, openclaw, pi。"
-                ),
-                format!(
-                    "Unsupported app id: '{other}'. Allowed: claude, codex, gemini, opencode, hermes, openclaw, pi."
+                    "Unsupported app id: '{other}'. Supported by this build: claude, codex, hermes, pi."
                 ),
             )),
         }
@@ -825,8 +834,78 @@ mod tests {
     use std::env;
     use std::ffi::OsString;
     use std::fs;
-    use std::path::Path;
     use tempfile::TempDir;
+
+    /// 本构建只保留这四个 harness。`AppType::all()` 是供应商切换 / MCP 同步 /
+    /// skill 投影 / 启动期 live 导入的唯一入口，写死在这里就能防止后面再有人
+    /// 把 Gemini/OpenCode/OpenClaw 加回某个数组——那些新增条目会同时让已删
+    /// harness 的 live 目录被重新读写。
+    #[test]
+    fn app_type_all_is_exactly_the_four_supported_harnesses() {
+        let all = AppType::all().map(|app| app.as_str()).collect::<Vec<_>>();
+        assert_eq!(all, ["claude", "codex", "hermes", "pi"]);
+    }
+
+    /// 关键语义断言：多供应商共存的只有 Hermes/Pi，故障转移只有 Claude/Codex。
+    /// 这两个谓词被若干按 `AppType::all()` 遍历的流程共享，写反会让已删
+    /// harness 重新拿到"当前供应商"的切换路径。
+    #[test]
+    fn additive_and_failover_semantics_cover_only_supported_harnesses() {
+        let additive = AppType::all()
+            .filter(|app| app.is_additive_mode())
+            .map(|app| app.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(additive, ["hermes", "pi"]);
+
+        let failover = AppType::all()
+            .filter(|app| app.supports_failover())
+            .map(|app| app.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(failover, ["claude", "codex"]);
+    }
+
+    /// `all()` 之外的变体只是给旧数据留的解析出口，不参与任何语义判断。
+    #[test]
+    fn removed_variants_still_parse_but_are_not_part_of_the_supported_set() {
+        for removed in ["gemini", "opencode", "openclaw"] {
+            let parsed = AppType::from_str(removed).expect("legacy id must keep parsing");
+            assert!(!AppType::all().any(|app| app == parsed));
+            assert!(!parsed.is_additive_mode());
+            assert!(!parsed.supports_failover());
+        }
+
+        for app in AppType::all() {
+            assert_eq!(AppType::from_str(app.as_str()).unwrap(), app);
+        }
+    }
+
+    /// `enabled_apps()` 是 MCP/Skill 写 live 配置的唯一入口，所以旧行里点亮的
+    /// Gemini/OpenCode 开关绝不能漏到这里。
+    ///
+    /// 旧数据库的 MCP 行可能是"全开"的年代存下来的；只要这条过滤跟着
+    /// `AppType::all()` 走，`remove_server_from_app` / `sync_server_to_app` 就永远
+    /// 拿不到已删 harness，`~/.gemini`、`~/.config/opencode` 也就不会被写。
+    #[test]
+    fn enabled_apps_never_reports_a_removed_harness() {
+        let mut apps = McpApps::default();
+        for app in [AppType::Gemini, AppType::OpenCode] {
+            apps.set_enabled_for(&app, true);
+        }
+        for kept in AppType::all() {
+            apps.set_enabled_for(&kept, true);
+        }
+
+        let enabled = apps
+            .enabled_apps()
+            .into_iter()
+            .map(|app| app.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(enabled, ["claude", "codex", "hermes"]);
+        assert!(
+            apps.gemini && apps.opencode,
+            "legacy bits stay set in the row, so this test is not vacuous"
+        );
+    }
 
     struct TempHome {
         #[allow(dead_code)] // 字段通过 Drop trait 管理临时目录生命周期
@@ -835,6 +914,12 @@ mod tests {
         original_home: Option<OsString>,
         original_userprofile: Option<OsString>,
         original_config_dir: Option<OsString>,
+        /// 进入 guard 之前生效的 home override。
+        ///
+        /// 必须原样恢复，不能拿环境里的 `HOME` 反推：guard drop 之后这段环境
+        /// 已经交还给别的测试，此时把 ambient `HOME` 写进 override 会让后续
+        /// 测试把配置写回真实用户目录。
+        original_test_home_override: Option<std::path::PathBuf>,
     }
 
     impl TempHome {
@@ -844,6 +929,7 @@ mod tests {
             let original_home = env::var_os("HOME");
             let original_userprofile = env::var_os("USERPROFILE");
             let original_config_dir = env::var_os("CC_SWITCH_CONFIG_DIR");
+            let original_test_home_override = crate::test_support::test_home_override();
 
             env::set_var("HOME", dir.path());
             env::set_var("USERPROFILE", dir.path());
@@ -857,6 +943,7 @@ mod tests {
                 original_home,
                 original_userprofile,
                 original_config_dir,
+                original_test_home_override,
             }
         }
     }
@@ -879,7 +966,7 @@ mod tests {
             }
 
             crate::test_support::set_test_home_override(
-                self.original_home.as_deref().map(Path::new),
+                self.original_test_home_override.as_deref(),
             );
             crate::settings::reload_test_settings();
         }

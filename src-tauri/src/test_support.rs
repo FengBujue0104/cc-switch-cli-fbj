@@ -1,7 +1,10 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard, OnceLock, RwLock};
+// 只有 Unix 的 daemon 清理路径需要超时计时；Windows 上留着 import 会是 unused。
+#[cfg(unix)]
 use std::time::{Duration, Instant};
+use tempfile::TempDir;
 
 pub(crate) type TestHomeSettingsLock = MutexGuard<'static, ()>;
 
@@ -37,6 +40,7 @@ pub(crate) struct TestEnvGuard {
     old_home: Option<OsString>,
     old_userprofile: Option<OsString>,
     old_test_home: Option<OsString>,
+    old_test_home_override: Option<PathBuf>,
     old_cc_switch_config_dir: Option<OsString>,
     old_claude_config_dir: Option<OsString>,
     old_codex_home: Option<OsString>,
@@ -49,6 +53,7 @@ impl TestEnvGuard {
         let old_home = std::env::var_os("HOME");
         let old_userprofile = std::env::var_os("USERPROFILE");
         let old_test_home = std::env::var_os("CC_SWITCH_TEST_HOME");
+        let old_test_home_override = test_home_override();
         let old_cc_switch_config_dir = std::env::var_os("CC_SWITCH_CONFIG_DIR");
         let old_claude_config_dir = std::env::var_os("CLAUDE_CONFIG_DIR");
         let old_codex_home = std::env::var_os("CODEX_HOME");
@@ -70,6 +75,7 @@ impl TestEnvGuard {
             old_home,
             old_userprofile,
             old_test_home,
+            old_test_home_override,
             old_cc_switch_config_dir,
             old_claude_config_dir,
             old_codex_home,
@@ -92,15 +98,53 @@ impl Drop for TestEnvGuard {
         restore_env("CLAUDE_CONFIG_DIR", &self.old_claude_config_dir);
         restore_env("CODEX_HOME", &self.old_codex_home);
         restore_env("XDG_RUNTIME_DIR", &self.old_xdg_runtime_dir);
-        set_test_home_override(self.old_home.as_deref().map(Path::new));
+        set_test_home_override(self.old_test_home_override.as_deref());
         crate::settings::reload_test_settings();
     }
 }
 
+pub(crate) fn disable_unified_codex_session_history() {
+    let mut settings = crate::settings::get_settings();
+    settings.unify_codex_session_history = false;
+    crate::settings::update_settings(settings).expect("disable unified Codex session history");
+}
 pub(crate) fn restore_env(key: &str, value: &Option<OsString>) {
     match value {
         Some(value) => std::env::set_var(key, value),
         None => std::env::remove_var(key),
+    }
+}
+
+/// 把 `CC_SWITCH_CONFIG_DIR` 指向一个新建的临时目录，Drop 时恢复原值。
+///
+/// `crate::settings::update_settings` 每次都按 `config::get_app_config_dir()`
+/// 现算落点，而该函数只认环境变量和 `home_dir()`，没有"是否在测试中"的判断。
+/// 因此任何在单元测试里改 settings 的 guard 都必须先建这个沙箱，否则会直接写
+/// 进真实用户的 `~/.cc-switch/settings.json`（先前确实发生过：宿主文件里出现
+/// 了只存在于单元测试字面量里的 `claudeConfigDir`）。
+///
+/// 生命周期应该跟"改 settings 的那个 guard"一致：guard 构造时建、Drop 时恢复，
+/// 这样不会影响同一进程内其它不碰 settings 的测试。
+pub(crate) struct ConfigDirSandbox {
+    _temp: TempDir,
+    old: Option<OsString>,
+}
+
+impl ConfigDirSandbox {
+    pub(crate) fn new() -> Self {
+        let temp = tempfile::Builder::new()
+            .prefix("ccs-cfg-")
+            .tempdir()
+            .expect("create test config dir sandbox");
+        let old = std::env::var_os("CC_SWITCH_CONFIG_DIR");
+        std::env::set_var("CC_SWITCH_CONFIG_DIR", temp.path());
+        Self { _temp: temp, old }
+    }
+}
+
+impl Drop for ConfigDirSandbox {
+    fn drop(&mut self) {
+        restore_env("CC_SWITCH_CONFIG_DIR", &self.old);
     }
 }
 

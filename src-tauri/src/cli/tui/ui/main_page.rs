@@ -53,19 +53,6 @@ pub(super) fn render_main(
 ) {
     let current_provider = main_provider_status(app, data);
 
-    let mcp_enabled = data
-        .mcp
-        .rows
-        .iter()
-        .filter(|s| s.server.apps.is_enabled_for(&app.app_type))
-        .count();
-    let skills_enabled = data
-        .skills
-        .installed
-        .iter()
-        .filter(|skill| skill.apps.is_enabled_for(&app.app_type))
-        .count();
-
     let api_url = main_api_url(app, data);
 
     let label_width = 14;
@@ -99,59 +86,12 @@ pub(super) fn render_main(
         .iter()
         .filter(|row| row.provider.in_failover_queue)
         .count();
-    let current_quota_line = data
-        .providers
-        .rows
-        .iter()
-        .find(|row| row.is_current)
-        .filter(|row| data::quota_target_for_provider(&app.app_type, row).is_some())
-        .and_then(|row| quota_compact_line(data.quota.state_for(&row.id), theme, true));
-
     let mut connection_lines = vec![
         kv_line(
             theme,
             texts::provider_label(),
             label_width,
-            vec![
-                Span::styled(current_provider.clone(), provider_name_style),
-                // Do not claim a connection state until a real health check has run.
-                Span::raw("   "),
-                Span::styled(
-                    format!("{} ", texts::tui_label_mcp_short()),
-                    Style::default()
-                        .fg(theme.comment)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(
-                    format!(
-                        "[{}/{} {}]",
-                        mcp_enabled,
-                        data.mcp.rows.len(),
-                        texts::tui_label_mcp_servers_active()
-                    ),
-                    value_style,
-                ),
-                Span::raw("   "),
-                Span::styled(
-                    format!("{} ", texts::tui_label_skills()),
-                    Style::default()
-                        .fg(theme.comment)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(
-                    format!(
-                        "[{}/{} {}]",
-                        skills_enabled,
-                        data.skills.installed.len(),
-                        texts::tui_label_mcp_servers_active()
-                    ),
-                    if data.skills.installed.is_empty() {
-                        Style::default().fg(theme.surface)
-                    } else {
-                        value_style
-                    },
-                ),
-            ],
+            vec![Span::styled(current_provider.clone(), provider_name_style)],
         ),
         kv_line(
             theme,
@@ -160,104 +100,6 @@ pub(super) fn render_main(
             vec![Span::styled(api_url, value_style)],
         ),
     ];
-    if let Some(quota) = current_quota_line {
-        connection_lines.push(kv_line(
-            theme,
-            texts::tui_label_quota(),
-            label_width,
-            quota.spans,
-        ));
-    }
-
-    let webdav = data.config.webdav_sync.as_ref();
-    let is_config_value_set = |value: &str| !value.trim().is_empty();
-    let webdav_enabled = webdav.map(|cfg| cfg.enabled).unwrap_or(false);
-    let is_configured = webdav
-        .map(|cfg| {
-            is_config_value_set(&cfg.base_url)
-                && is_config_value_set(&cfg.username)
-                && is_config_value_set(&cfg.password)
-        })
-        .unwrap_or(false);
-    let webdav_status = webdav.map(|cfg| &cfg.status);
-    let last_error = webdav_status
-        .and_then(|status| status.last_error.as_deref())
-        .map(str::trim)
-        .filter(|text| !text.is_empty());
-    let has_error = webdav_enabled && is_configured && last_error.is_some();
-    let is_ok = webdav_enabled
-        && is_configured
-        && !has_error
-        && webdav_status
-            .and_then(|status| status.last_sync_at)
-            .is_some();
-
-    let webdav_status_text = if !webdav_enabled || !is_configured {
-        texts::tui_webdav_status_not_configured().to_string()
-    } else if has_error {
-        let detail = last_error
-            .map(|err| truncate_to_display_width(err, 22))
-            .unwrap_or_default();
-        if detail.is_empty() {
-            texts::tui_webdav_status_error().to_string()
-        } else {
-            texts::tui_webdav_status_error_with_detail(&detail)
-        }
-    } else if is_ok {
-        texts::tui_webdav_status_ok().to_string()
-    } else {
-        texts::tui_webdav_status_configured().to_string()
-    };
-
-    let webdav_status_style = if theme.no_color {
-        Style::default()
-    } else if has_error {
-        Style::default().fg(theme.warn)
-    } else if is_ok {
-        Style::default().fg(theme.ok)
-    } else {
-        Style::default().fg(theme.surface)
-    };
-
-    let last_sync_at = webdav_status.and_then(|status| status.last_sync_at);
-    let webdav_last_sync_text = last_sync_at
-        .and_then(format_sync_time_local_to_minute)
-        .unwrap_or_else(|| texts::tui_webdav_status_never_synced().to_string());
-    let webdav_last_sync_style = if last_sync_at.is_some() {
-        value_style
-    } else {
-        Style::default().fg(theme.surface)
-    };
-
-    // The WebDAV card was folded into the connection card: one compact line
-    // carrying the same status glyph plus the last-sync time.
-    let webdav_glyph = if has_error {
-        "!"
-    } else if is_ok {
-        webdav_ok_glyph()
-    } else {
-        webdav_neutral_glyph()
-    };
-    let webdav_spans = vec![
-        Span::styled(format!("{webdav_glyph} "), webdav_status_style),
-        Span::styled(webdav_status_text.clone(), webdav_status_style),
-        Span::styled(
-            home_separator().to_string(),
-            Style::default().fg(theme.comment),
-        ),
-        Span::styled(webdav_last_sync_text.clone(), webdav_last_sync_style),
-    ];
-
-    // Keep WebDAV on its own connection-card row. Quota text is provider
-    // controlled and can be wider than the terminal; appending WebDAV after it
-    // made sync errors disappear entirely when the row was clipped.
-    connection_lines.push(kv_line(
-        theme,
-        texts::tui_home_section_webdav(),
-        label_width,
-        webdav_spans,
-    ));
-
     let block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Plain)
@@ -267,8 +109,8 @@ pub(super) fn render_main(
 
     let inner = block.inner(area);
     let content = inset_left(inner, CONTENT_INSET_LEFT);
-    // The ASCII logo hero is gone: without the proxy dashboard the chart owns
-    // the whole elastic region below the env-check card.
+    // The ASCII logo hero is gone: without the proxy dashboard the whole elastic
+    // region below the env-check card stays empty.
     let bottom_hero_height = if current_app_routed { 10 } else { 0 };
     // The card does not wrap. Ratatui word-wraps, so a wrap estimate built from
     // character counts under-counts on narrow terminals and clips the last line
@@ -292,15 +134,13 @@ pub(super) fn render_main(
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(connection_card_height),
-            Constraint::Length(8),
-            Constraint::Min(0),
+            Constraint::Length(ENV_CHECK_CARD_HEIGHT),
         ])
         .split(chunks[0]);
 
     let card_border = Style::default().fg(theme.dim);
     render_connection_card(frame, top_chunks[0], theme, &connection_lines, card_border);
     render_local_env_check_card(frame, app, top_chunks[1], theme, card_border);
-    render_home_usage_chart(frame, app, data, top_chunks[2], theme, card_border);
 
     if current_app_routed {
         render_proxy_activity_dashboard(
@@ -321,30 +161,9 @@ pub(super) fn render_main(
     }
 }
 
-/// Section separator used by the home cards; ASCII mode drops the middle dot.
-fn home_separator() -> &'static str {
-    if icons::use_emoji() {
-        " · "
-    } else {
-        " - "
-    }
-}
-
-fn webdav_ok_glyph() -> &'static str {
-    if icons::use_emoji() {
-        "✓"
-    } else {
-        "+"
-    }
-}
-
-fn webdav_neutral_glyph() -> &'static str {
-    if icons::use_emoji() {
-        "•"
-    } else {
-        "*"
-    }
-}
+/// The env-check card lays the supported CLIs out as a two-column grid; with the
+/// four supported harnesses that is two rows of two lines plus the card borders.
+const ENV_CHECK_CARD_HEIGHT: u16 = 6;
 
 #[expect(
     clippy::too_many_arguments,
@@ -562,37 +381,28 @@ fn render_local_env_check_card(
     frame.render_widget(outer.clone(), area);
     let inner = outer.inner(area);
 
+    let tools = LocalTool::all();
+    // Two columns, two lines per cell: one row of the grid holds two tools.
+    let grid_rows = tools.len().div_ceil(2);
+    let row_constraints = vec![Constraint::Length(2); grid_rows];
     let rows = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(2),
-            Constraint::Length(2),
-            Constraint::Length(2),
-        ])
+        .constraints(row_constraints)
         .split(inner);
 
-    let row_columns = rows
+    let cell_areas = rows
         .iter()
-        .map(|row| {
+        .flat_map(|row| {
             Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
                 .split(*row)
+                .to_vec()
         })
         .collect::<Vec<_>>();
 
-    let cell_areas = row_columns
-        .iter()
-        .flat_map(|columns| columns.iter().copied())
-        .collect::<Vec<_>>();
-
-    let cells = LocalTool::all()
-        .iter()
-        .zip(cell_areas)
-        .map(|(tool, cell_area)| (*tool, tool.display_name(), cell_area));
-
-    for (tool, display_name, cell_area) in cells {
-        render_local_env_tool_cell(frame, app, theme, tool, display_name, cell_area);
+    for (tool, cell_area) in tools.iter().zip(cell_areas) {
+        render_local_env_tool_cell(frame, app, theme, *tool, tool.display_name(), cell_area);
     }
 }
 

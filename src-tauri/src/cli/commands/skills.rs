@@ -234,27 +234,23 @@ fn list_installed() -> Result<(), AppError> {
     }
 
     let mut table = create_table();
-    table.set_header(vec![
-        "Directory",
-        "Name",
-        "Claude",
-        "Codex",
-        "Gemini",
-        "OpenCode",
-        "Hermes",
-        "Pi",
-    ]);
+    // 列来自 `supported_skill_apps()`（== `AppType::all()`），不硬编码：
+    // 硬编码的表头就是已删 harness 复活最常见的位置。
+    let columns = SkillService::supported_skill_apps().collect::<Vec<_>>();
+    let mut header = vec!["Directory", "Name"];
+    header.extend(columns.iter().map(|app| app.display_name()));
+    table.set_header(header);
     for skill in skills {
-        table.add_row(vec![
-            skill.directory,
-            skill.name,
-            if skill.apps.claude { "✓" } else { " " }.to_string(),
-            if skill.apps.codex { "✓" } else { " " }.to_string(),
-            if skill.apps.gemini { "✓" } else { " " }.to_string(),
-            if skill.apps.opencode { "✓" } else { " " }.to_string(),
-            if skill.apps.hermes { "✓" } else { " " }.to_string(),
-            if skill.apps.pi { "✓" } else { " " }.to_string(),
-        ]);
+        let mut row = vec![skill.directory, skill.name];
+        row.extend(columns.iter().map(|app| {
+            if skill.apps.is_enabled_for(app) {
+                "✓"
+            } else {
+                " "
+            }
+            .to_string()
+        }));
+        table.add_row(row);
     }
 
     println!("{}", table);
@@ -526,15 +522,21 @@ fn show_skill_info(spec: &str) -> Result<(), AppError> {
     {
         println!("Desc:      {}", desc);
     }
-    println!(
-        "Enabled:   claude={} codex={} gemini={} opencode={} hermes={} pi={}",
-        record.apps.claude,
-        record.apps.codex,
-        record.apps.gemini,
-        record.apps.opencode,
-        record.apps.hermes,
-        record.apps.pi
-    );
+    println!("Enabled:   {}", {
+        let mut parts = Vec::new();
+        for app in AppType::all() {
+            let enabled = match app {
+                AppType::Claude => record.apps.claude,
+                AppType::Codex => record.apps.codex,
+                AppType::Hermes => record.apps.hermes,
+                AppType::Pi => record.apps.pi,
+                // `all()` 之外的变体不可能出现在这里；给个稳定占位避免 panic。
+                _ => false,
+            };
+            parts.push(format!("{}={}", app.as_str(), enabled));
+        }
+        parts.join(" ")
+    });
 
     Ok(())
 }

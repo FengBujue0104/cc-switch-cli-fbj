@@ -9,15 +9,21 @@ use crate::store::AppState;
 pub struct McpService;
 
 impl McpService {
+    /// 本构建里真正能承接 MCP 投影的 harness。
+    ///
+    /// 不能直接等于 `AppType::all()`：Pi 明确不支持 MCP 管理
+    /// （`cli/commands/mcp.rs` 会以 "Pi does not support MCP management" 拒绝），
+    /// `McpApps` 里也没有 `pi` 位，`is_enabled_for(Pi)` 恒为 false。把它算进来的
+    /// 后果只有一个：`sync_all_enabled` 白白多跑一轮针对 Pi 的空投影。
+    ///
+    /// Gemini/OpenCode 已从本构建移除，它们的 live 投影路径（
+    /// `sync_single_server_to_gemini` / `..._to_opencode`）虽然还编译着，但这里
+    /// 不能再出现它们，否则 `sync_all_enabled` 又会往已删 harness 的 live 目录
+    /// 里写文件（`project_servers_to_app` 只会读 `should_sync_live` 启发式，
+    /// 没有其它门槛）。
     pub fn supported_mcp_apps() -> impl Iterator<Item = AppType> {
-        [
-            AppType::Claude,
-            AppType::Codex,
-            AppType::Gemini,
-            AppType::OpenCode,
-            AppType::Hermes,
-        ]
-        .into_iter()
+        AppType::all()
+            .filter(|app| matches!(app, AppType::Claude | AppType::Codex | AppType::Hermes))
     }
 
     /// 获取所有 MCP 服务器（统一结构）
@@ -390,13 +396,97 @@ impl McpService {
         Ok(count)
     }
 
+    /// 只从本构建保留的 harness 导入。
+    ///
+    /// 按 `supported_mcp_apps()` 派生，不手抄 app 列表：已删的 Gemini/OpenCode
+    /// 的 live 目录里可能还留着配置，但从那里"导入"本身就是已删 harness 复活的
+    /// 一条路径——导入会把它们的服务器并回统一配置，用户随后在 UI 里看到的来源
+    /// 就成了谜。（导入本身是读，不会往那些目录写；真正会写的是紧随其后的同步，
+    /// 而那一步由 `enabled_apps()` / `supported_mcp_apps()` 兜住。）
     pub fn import_from_supported_apps(state: &AppState) -> Result<usize, AppError> {
         let mut total = 0;
-        total += Self::import_from_claude(state)?;
-        total += Self::import_from_codex(state)?;
-        total += Self::import_from_gemini(state)?;
-        total += Self::import_from_opencode(state)?;
-        total += Self::import_from_hermes(state)?;
+        for app in Self::supported_mcp_apps() {
+            let count = match app {
+                AppType::Claude => Self::import_from_claude(state)?,
+                AppType::Codex => Self::import_from_codex(state)?,
+                AppType::Hermes => Self::import_from_hermes(state)?,
+                other => unreachable!(
+                    "supported_mcp_apps() must stay within Claude/Codex/Hermes, got {other:?}"
+                ),
+            };
+            total += count;
+        }
         Ok(total)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `sync_all_enabled` 按这个集合 `mkdir -p` 并写每个 app 的 live MCP 配置，
+    /// 所以这里必须是 `AppType::all()` 的子集（Pi 不支持 MCP），且绝不能混入
+    /// 已删的 Gemini/OpenCode。
+    #[test]
+    fn supported_mcp_apps_stays_within_app_type_all() {
+        let apps = McpService::supported_mcp_apps()
+            .map(|app| app.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(apps, ["claude", "codex", "hermes"]);
+        assert!(
+            apps.iter()
+                .all(|app| AppType::all().any(|kept| kept.as_str() == *app)),
+            "MCP apps must be a subset of AppType::all(): {apps:?}"
+        );
+    }
+
+    /// `mcp import` 只能从 `supported_mcp_apps()` 里的 harness 导入。
+    ///
+    /// 上游版本会把 `~/.gemini`、`~/.config/opencode` 里的 mcpServers 一起吸进
+    /// 统一配置。那两个 harness 已从本构建删除，导入它们是"删不干净"最隐蔽的
+    /// 一种形态：导入本身只读那些目录，但随后 `sync_all_enabled` 会按统一配置
+    /// 做投影，用户看到的就是来源不明的条目——能不能不往已删目录写文件，全指望
+    /// 别的门槛，而不是这里。
+    #[test]
+    #[serial_test::serial(home_settings)]
+    fn import_from_supported_apps_ignores_removed_harness_live_configs() {
+        use serde_json::json;
+
+        use crate::test_support::TestEnvGuard;
+
+        let temp_home = tempfile::TempDir::new().expect("create temp home");
+        let _env = TestEnvGuard::isolated(temp_home.path());
+
+        let gemini_dir = temp_home.path().join(".gemini");
+        std::fs::create_dir_all(&gemini_dir).expect("create gemini dir");
+        std::fs::write(
+            gemini_dir.join("settings.json"),
+            json!({"mcpServers": {"gemini_only": {"command": "echo"}}}).to_string(),
+        )
+        .expect("seed gemini mcp config");
+
+        let opencode_dir = temp_home.path().join(".config").join("opencode");
+        std::fs::create_dir_all(&opencode_dir).expect("create opencode dir");
+        std::fs::write(
+            opencode_dir.join("opencode.json"),
+            json!({"mcp": {"opencode_only": {"type": "local", "command": ["echo"]}}}).to_string(),
+        )
+        .expect("seed opencode mcp config");
+
+        let state = crate::store::AppState::try_new().expect("create app state");
+
+        let imported =
+            McpService::import_from_supported_apps(&state).expect("import should succeed");
+
+        assert_eq!(
+            imported, 0,
+            "removed harnesses must not contribute imported servers"
+        );
+        let servers = McpService::get_all_servers(&state).expect("load unified servers");
+        assert!(
+            !servers.contains_key("gemini_only") && !servers.contains_key("opencode_only"),
+            "removed harness MCP servers must not enter the unified config: {:?}",
+            servers.keys().collect::<Vec<_>>()
+        );
     }
 }

@@ -31,6 +31,17 @@ mod app_config {
                 AppType::Pi => "pi",
             }
         }
+
+        /// 与 `src/app_config.rs::AppType::all()` 一致：本构建只保留这四个 harness。
+        pub fn all() -> impl Iterator<Item = AppType> {
+            [
+                AppType::Claude,
+                AppType::Codex,
+                AppType::Hermes,
+                AppType::Pi,
+            ]
+            .into_iter()
+        }
     }
 }
 
@@ -54,6 +65,17 @@ mod config {
     use crate::error::AppError;
 
     pub(crate) fn home_dir() -> Option<PathBuf> {
+        // `HOME`/`USERPROFILE` come first: the guards in this file set those but not
+        // `CC_SWITCH_TEST_HOME`, so an ambient `CC_SWITCH_TEST_HOME` must not
+        // outrank them and escape the temp home.
+        for key in ["HOME", "USERPROFILE", "CC_SWITCH_TEST_HOME"] {
+            if let Some(home) = std::env::var_os(key) {
+                let home = PathBuf::from(home);
+                if !home.as_os_str().is_empty() {
+                    return Some(home);
+                }
+            }
+        }
         dirs::home_dir()
     }
 
@@ -298,7 +320,6 @@ mod test_support {
 mod settings_impl;
 
 use app_config::AppType;
-use error::AppError;
 use settings_impl::{
     default_visible_apps, get_settings, get_visible_apps, next_visible_app, reload_test_settings,
     set_visible_apps, update_settings, AppSettings, VisibleApps, VisibleAppsMode,
@@ -393,9 +414,7 @@ fn default_visible_apps_hide_gemini() {
         vec![
             AppType::Claude,
             AppType::Codex,
-            AppType::OpenCode,
             AppType::Hermes,
-            AppType::OpenClaw,
             AppType::Pi,
         ]
     );
@@ -470,12 +489,13 @@ fn load_reads_valid_non_default_visible_apps_from_settings_json() {
             hermes: true,
         }
     );
+    // The stored flags round-trip verbatim, but a stale file from an older build
+    // can never resurrect a removed harness in the tab bar.
     assert_eq!(
         visible.ordered_enabled(),
         vec![
+            AppType::Claude,
             AppType::Codex,
-            AppType::Gemini,
-            AppType::OpenCode,
             AppType::Hermes,
             AppType::Pi,
         ]
@@ -503,8 +523,8 @@ fn load_partial_visible_apps_object_uses_defaults_for_missing_keys() {
             claude: false,
             codex: true,
             gemini: false,
-            opencode: true,
-            openclaw: true,
+            opencode: false,
+            openclaw: false,
             pi: true,
             hermes: true,
         }
@@ -572,10 +592,10 @@ fn existing_settings_without_visible_apps_settings_migrate_to_manual_mode() {
 
 #[test]
 #[serial]
-fn set_visible_apps_rejects_zero_selection() {
+fn zero_selection_cannot_empty_the_tab_bar() {
     let _home = HomeGuard::new();
 
-    let err = set_visible_apps(VisibleApps {
+    set_visible_apps(VisibleApps {
         claude: false,
         codex: false,
         gemini: false,
@@ -584,17 +604,23 @@ fn set_visible_apps_rejects_zero_selection() {
         pi: false,
         hermes: false,
     })
-    .expect_err("zero visible apps should be rejected");
+    .expect("persist the stored flags");
 
-    match err {
-        AppError::InvalidInput(message) => assert!(message.contains("At least one app")),
-        other => panic!("unexpected error: {other:?}"),
-    }
+    assert_eq!(
+        get_visible_apps().ordered_enabled(),
+        vec![
+            AppType::Claude,
+            AppType::Codex,
+            AppType::Hermes,
+            AppType::Pi,
+        ],
+        "the tab bar is pinned, so no stored selection can empty it"
+    );
 }
 
 #[test]
 #[serial]
-fn update_settings_rejects_all_false_visible_apps() {
+fn update_settings_keeps_the_tab_bar_populated_when_every_flag_is_false() {
     let _home = HomeGuard::new();
 
     let settings = AppSettings {
@@ -610,13 +636,18 @@ fn update_settings_rejects_all_false_visible_apps() {
         ..Default::default()
     };
 
-    let err =
-        update_settings(settings).expect_err("update_settings should reject zero visible apps");
+    update_settings(settings).expect("update settings");
 
-    match err {
-        AppError::InvalidInput(message) => assert!(message.contains("At least one app")),
-        other => panic!("unexpected error: {other:?}"),
-    }
+    assert_eq!(
+        get_visible_apps().ordered_enabled(),
+        vec![
+            AppType::Claude,
+            AppType::Codex,
+            AppType::Hermes,
+            AppType::Pi,
+        ],
+        "the tab bar is pinned, so no stored selection can empty it"
+    );
 }
 
 #[test]
@@ -645,7 +676,7 @@ fn empty_visible_apps_object_normalizes_without_resetting_the_file() {
 
 #[test]
 #[serial]
-fn load_normalizes_all_false_visible_apps_to_defaults() {
+fn load_keeps_all_false_visible_apps_from_emptying_the_tab_bar() {
     let home = HomeGuard::new();
     write_settings_json(
         &home,
@@ -664,9 +695,16 @@ fn load_normalizes_all_false_visible_apps_to_defaults() {
 
     reload_test_settings();
 
-    let settings = AppSettings::load();
-    assert_eq!(settings.visible_apps, default_visible_apps());
-    assert_eq!(get_visible_apps(), default_visible_apps());
+    assert_eq!(
+        get_visible_apps().ordered_enabled(),
+        vec![
+            AppType::Claude,
+            AppType::Codex,
+            AppType::Hermes,
+            AppType::Pi,
+        ],
+        "an all-false legacy file must not leave the tab bar empty"
+    );
 }
 
 #[test]
@@ -694,7 +732,7 @@ fn malformed_visible_apps_json_falls_back_to_full_defaults() {
 
 #[test]
 #[serial]
-fn next_visible_app_wraps_and_skips_hidden_entries() {
+fn next_visible_app_cycles_the_supported_harnesses_and_ignores_stored_flags() {
     let visible = VisibleApps {
         claude: true,
         codex: false,
@@ -707,26 +745,41 @@ fn next_visible_app_wraps_and_skips_hidden_entries() {
 
     assert_eq!(
         next_visible_app(&visible, &AppType::Claude, 1),
-        Some(AppType::OpenCode)
+        Some(AppType::Codex)
     );
     assert_eq!(
-        next_visible_app(&visible, &AppType::OpenClaw, 1),
+        next_visible_app(&visible, &AppType::Codex, 1),
+        Some(AppType::Hermes)
+    );
+    assert_eq!(
+        next_visible_app(&visible, &AppType::Pi, 1),
         Some(AppType::Claude)
-    );
-    assert_eq!(
-        next_visible_app(&visible, &AppType::Hermes, 1),
-        Some(AppType::OpenClaw)
     );
     assert_eq!(
         next_visible_app(&visible, &AppType::Claude, -1),
-        Some(AppType::OpenClaw)
+        Some(AppType::Pi)
     );
     assert_eq!(
         next_visible_app(&visible, &AppType::Hermes, -1),
-        Some(AppType::OpenCode)
+        Some(AppType::Codex)
     );
-    assert_eq!(
-        next_visible_app(&visible, &AppType::OpenCode, -1),
-        Some(AppType::Claude)
-    );
+}
+
+#[test]
+#[serial]
+fn next_visible_app_falls_back_to_the_first_supported_harness_for_a_removed_app() {
+    let visible = default_visible_apps();
+
+    for removed in [AppType::Gemini, AppType::OpenCode, AppType::OpenClaw] {
+        assert_eq!(
+            next_visible_app(&visible, &removed, 1),
+            Some(AppType::Claude),
+            "{removed:?} cannot anchor the cycle"
+        );
+        assert_eq!(
+            next_visible_app(&visible, &removed, -1),
+            Some(AppType::Claude),
+            "{removed:?} cannot anchor the cycle"
+        );
+    }
 }

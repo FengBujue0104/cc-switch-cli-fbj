@@ -910,51 +910,6 @@ impl App {
                     self.overlay = Overlay::ExternalEditorPicker { selected, editors };
                     Action::None
                 }
-                Some(SettingsItem::VisibleAppsMode) => {
-                    let current = crate::settings::get_visible_apps_settings().mode;
-                    let next = match current {
-                        crate::settings::VisibleAppsMode::Auto => {
-                            crate::settings::VisibleAppsMode::Manual
-                        }
-                        crate::settings::VisibleAppsMode::Manual => {
-                            crate::settings::VisibleAppsMode::Auto
-                        }
-                    };
-                    Action::SetVisibleAppsMode { mode: next }
-                }
-                Some(SettingsItem::VisibleApps) => {
-                    self.overlay = Overlay::VisibleAppsPicker {
-                        selected: app_type_picker_index(&self.app_type),
-                        apps: crate::settings::get_visible_apps(),
-                    };
-                    Action::None
-                }
-                Some(SettingsItem::SkillsStorageLocation) => {
-                    self.overlay = Overlay::SkillsStorageLocationPicker {
-                        selected: storage_location_picker_index(
-                            crate::settings::get_skill_storage_location(),
-                        ),
-                    };
-                    Action::None
-                }
-                Some(SettingsItem::SkillsSyncMethod) => {
-                    self.overlay = Overlay::SkillsSyncMethodPicker {
-                        selected: sync_method_picker_index(data.skills.sync_method),
-                    };
-                    Action::None
-                }
-                Some(SettingsItem::OpenClawConfigDir) => {
-                    let buffer = crate::settings::get_settings()
-                        .openclaw_config_dir
-                        .unwrap_or_default();
-                    self.overlay = Overlay::TextInput(TextInputState {
-                        title: texts::tui_settings_openclaw_config_dir_label().to_string(),
-                        prompt: texts::tui_settings_openclaw_config_dir_prompt().to_string(),
-                        input: TextInput::new(buffer),
-                        submit: TextSubmit::SettingsOpenClawConfigDir,
-                    });
-                    Action::None
-                }
                 Some(SettingsItem::PiConfigDir) => {
                     let buffer = crate::settings::get_settings()
                         .pi_config_dir

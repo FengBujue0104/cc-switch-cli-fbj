@@ -32,6 +32,8 @@ pub(crate) fn get_opencode_base_dir() -> PathBuf {
             return PathBuf::from(xdg).join("opencode");
         }
     }
+    // 只认 `dirs::home_dir()`：OpenCode 已从本构建移除，这里没有任何理由去
+    // 读 `CC_SWITCH_TEST_HOME` 之类的开关，平白多一个生产路径上的环境变量入口。
     dirs::home_dir()
         .map(|h| h.join(".local/share/opencode"))
         .unwrap_or_else(|| PathBuf::from(".local/share/opencode"))

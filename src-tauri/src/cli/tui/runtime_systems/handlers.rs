@@ -1426,39 +1426,6 @@ pub(crate) fn handle_skills_msg(
                 );
             }
         },
-        SkillsMsg::StorageMigrated { target, result } => match result {
-            Ok(result) => {
-                app.overlay = Overlay::None;
-                *data = UiData::load(&app.app_type)?;
-                invalidation = CacheInvalidation::DataReloaded;
-                let location = texts::tui_skills_storage_location_name(target);
-                if result.errors.is_empty() {
-                    app.push_toast(
-                        texts::tui_toast_skills_storage_location_set(
-                            location,
-                            result.migrated_count,
-                            result.skipped_count,
-                        ),
-                        ToastKind::Success,
-                    );
-                } else {
-                    app.push_copyable_toast(
-                        texts::tui_toast_skills_storage_location_partial(
-                            location,
-                            result.migrated_count,
-                            result.skipped_count,
-                            result.errors.len(),
-                        ),
-                        ToastKind::Warning,
-                        result.errors.join("\n"),
-                    );
-                }
-            }
-            Err(err) => {
-                app.overlay = Overlay::None;
-                app.push_toast(err, ToastKind::Error);
-            }
-        },
     }
 
     Ok(invalidation)
@@ -2060,43 +2027,6 @@ mod tests {
     }
 
     #[test]
-    #[serial_test::serial(home_settings)]
-    fn skill_storage_migration_feedback_preserves_partial_error_details() {
-        let temp = tempfile::tempdir().expect("create isolated home");
-        let _env = crate::test_support::TestEnvGuard::isolated(temp.path());
-        let mut settings = crate::settings::AppSettings::default();
-        settings.skill_storage_location = crate::services::skill::SkillStorageLocation::Unified;
-        crate::settings::update_settings(settings).expect("set unified storage");
-
-        let mut app = App::new(Some(AppType::Claude));
-        app.overlay = Overlay::Loading {
-            kind: LoadingKind::SkillOperation,
-            title: "Migrating".to_string(),
-            message: "Working".to_string(),
-        };
-        let mut data = UiData::default();
-        handle_skills_msg(
-            &mut app,
-            &mut data,
-            SkillsMsg::StorageMigrated {
-                target: crate::services::skill::SkillStorageLocation::Unified,
-                result: Ok(crate::services::skill::MigrationResult {
-                    migrated_count: 1,
-                    skipped_count: 0,
-                    errors: vec!["claude/managed: deployment preserved".to_string()],
-                }),
-            },
-        )
-        .expect("handle partial migration");
-
-        assert!(matches!(app.overlay, Overlay::None));
-        assert_eq!(
-            app.toast.as_ref().and_then(|toast| toast.copy_text()),
-            Some("claude/managed: deployment preserved")
-        );
-    }
-
-    #[test]
     fn partial_skill_deployment_keeps_the_tui_retry_marker() {
         let mut app = App::new(Some(AppType::Claude));
         let id = "owner/repo:demo";
@@ -2142,9 +2072,9 @@ mod tests {
 
     #[test]
     fn hidden_manual_manifest_publication_does_not_restart_cost_projection() {
-        let mut app = App::new(Some(AppType::Gemini));
+        let mut app = App::new(Some(AppType::Claude));
         app.route = Route::Main;
-        let request_id = app.sessions.start_scan("gemini".to_string());
+        let request_id = app.sessions.start_scan("claude".to_string());
         app.sessions.mark_manual_refresh(request_id);
         let scope_epoch = app.sessions.scope_epoch;
 
@@ -2153,11 +2083,11 @@ mod tests {
             SessionMsg::ManifestPublished {
                 request_id,
                 scope_epoch,
-                scope: "gemini".to_string(),
+                scope: "claude".to_string(),
                 result: Ok(published(
                     "hidden-manual",
                     1,
-                    vec![session("gemini", "hidden-session", 2)],
+                    vec![session("claude", "hidden-session", 2)],
                 )),
             },
         );
@@ -2682,20 +2612,20 @@ mod tests {
 
     #[test]
     fn manual_manifest_publication_requests_immediate_cost_and_one_usage_sync() {
-        let mut app = App::new(Some(AppType::Gemini));
+        let mut app = App::new(Some(AppType::Claude));
         app.route = Route::Sessions;
-        let request_id = app.sessions.start_scan("gemini".to_string());
+        let request_id = app.sessions.start_scan("claude".to_string());
         app.sessions.mark_manual_refresh(request_id);
         let scope_epoch = app.sessions.scope_epoch;
         let (published, reader) =
-            published("manual", 1, vec![session("gemini", "manual-session", 2)]);
+            published("manual", 1, vec![session("claude", "manual-session", 2)]);
 
         handle_session_msg(
             &mut app,
             SessionMsg::ManifestPublished {
                 request_id,
                 scope_epoch,
-                scope: "gemini".to_string(),
+                scope: "claude".to_string(),
                 result: Ok((published, reader)),
             },
         );
@@ -2710,18 +2640,18 @@ mod tests {
 
     #[test]
     fn manual_manifest_publication_with_visible_page_requests_cost_before_reconcile() {
-        let mut app = App::new(Some(AppType::Gemini));
+        let mut app = App::new(Some(AppType::Claude));
         app.route = Route::Sessions;
-        let initial_request = app.sessions.start_scan("gemini".to_string());
+        let initial_request = app.sessions.start_scan("claude".to_string());
         let scope_epoch = app.sessions.scope_epoch;
         let (initial, initial_reader) =
-            published("initial", 1, vec![session("gemini", "initial-session", 1)]);
+            published("initial", 1, vec![session("claude", "initial-session", 1)]);
         handle_session_msg(
             &mut app,
             SessionMsg::ManifestPublished {
                 request_id: initial_request,
                 scope_epoch,
-                scope: "gemini".to_string(),
+                scope: "claude".to_string(),
                 result: Ok((initial, initial_reader)),
             },
         );
@@ -2730,19 +2660,19 @@ mod tests {
             "initial page requests its overlay"
         );
 
-        let refresh_request = app.sessions.start_scan("gemini".to_string());
+        let refresh_request = app.sessions.start_scan("claude".to_string());
         app.sessions.mark_manual_refresh(refresh_request);
         let (refreshed, refreshed_reader) = published(
             "refreshed",
             1,
-            vec![session("gemini", "refreshed-session", 2)],
+            vec![session("claude", "refreshed-session", 2)],
         );
         handle_session_msg(
             &mut app,
             SessionMsg::ManifestPublished {
                 request_id: refresh_request,
                 scope_epoch,
-                scope: "gemini".to_string(),
+                scope: "claude".to_string(),
                 result: Ok((refreshed, refreshed_reader)),
             },
         );

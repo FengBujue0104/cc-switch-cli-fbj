@@ -200,6 +200,11 @@ impl ProviderService {
         };
 
         let auth_type = Self::detect_gemini_auth_type(provider);
+        // Gemini 已从本构建移除，所以这里不再写 `~/.gemini`；但 `GeminiSecurityFlag`
+        // 不是"什么都不做"——它更新的是 cc-switch 自己的 `settings.json`，让
+        // `security.auth.selectedType` 跟上当前供应商的鉴权方式。因此这道门槛必须
+        // 给出一个非写入的 `PreparedLiveWrite`，而不能被调用方提前当成 Noop 吞掉
+        // （`prepare_live_snapshot` 里那道收口就特意为 Gemini 开了口子，原因写在那）。
         if !force_sync && !crate::sync_policy::should_sync_live(&AppType::Gemini) {
             return Ok(PreparedLiveWrite::GeminiSecurityFlag { auth_type });
         }

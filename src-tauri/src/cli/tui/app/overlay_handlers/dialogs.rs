@@ -128,11 +128,6 @@ impl App {
                     ConfirmAction::SkillsUninstall { directory } => Action::SkillsUninstall {
                         directory: directory.clone(),
                     },
-                    ConfirmAction::SkillsMigrateStorage { location } => {
-                        Action::SkillsSetStorageLocation {
-                            location: *location,
-                        }
-                    }
                     ConfirmAction::SkillsRepoRemove { owner, name } => Action::SkillsRepoRemove {
                         owner: owner.clone(),
                         name: name.clone(),
@@ -153,15 +148,6 @@ impl App {
                     ConfirmAction::SettingsSetGlobalOutboundProxy { config } => {
                         Action::SetGlobalOutboundProxy {
                             config: config.clone(),
-                        }
-                    }
-                    ConfirmAction::VisibleAppsAutoDetection => {
-                        Action::ConfirmVisibleAppsAutoDetection { use_auto: true }
-                    }
-                    ConfirmAction::VisibleAppsSwitchToManual { apps, selected } => {
-                        Action::SwitchVisibleAppsToManual {
-                            apps: apps.clone(),
-                            selected: *selected,
                         }
                     }
                     ConfirmAction::ProviderApiFormatProxyNotice => Action::None,
@@ -246,17 +232,6 @@ impl App {
                     };
                     return Some(Action::None);
                 }
-                if matches!(confirm.action, ConfirmAction::VisibleAppsAutoDetection) {
-                    self.close_overlay();
-                    return Some(Action::ConfirmVisibleAppsAutoDetection { use_auto: false });
-                }
-                if let ConfirmAction::VisibleAppsSwitchToManual { selected, .. } = &confirm.action {
-                    self.overlay = Overlay::VisibleAppsPicker {
-                        selected: *selected,
-                        apps: crate::settings::get_visible_apps(),
-                    };
-                    return Some(Action::None);
-                }
                 if matches!(
                     confirm.action,
                     ConfirmAction::CommonConfigNotice | ConfirmAction::UsageQueryNotice
@@ -282,16 +257,6 @@ impl App {
                 match confirm.action {
                     ConfirmAction::CommonConfigNotice => Action::ConfirmCommonConfigNotice,
                     ConfirmAction::UsageQueryNotice => Action::ConfirmUsageQueryNotice,
-                    ConfirmAction::VisibleAppsAutoDetection => {
-                        Action::ConfirmVisibleAppsAutoDetection { use_auto: false }
-                    }
-                    ConfirmAction::VisibleAppsSwitchToManual { selected, .. } => {
-                        self.overlay = Overlay::VisibleAppsPicker {
-                            selected,
-                            apps: crate::settings::get_visible_apps(),
-                        };
-                        Action::None
-                    }
                     ConfirmAction::ClaudeModelFillAll { source_idx } => {
                         self.overlay = Overlay::ClaudeModelPicker {
                             selected: source_idx,
@@ -434,15 +399,6 @@ impl App {
                     raw,
                     config,
                 )
-            }
-            TextSubmit::SettingsOpenClawConfigDir => {
-                let trimmed = raw.trim().to_string();
-                let path = if trimmed.is_empty() {
-                    None
-                } else {
-                    Some(trimmed)
-                };
-                Action::SetOpenClawConfigDir { path }
             }
             TextSubmit::SettingsPiConfigDir => {
                 let trimmed = raw.trim().to_string();

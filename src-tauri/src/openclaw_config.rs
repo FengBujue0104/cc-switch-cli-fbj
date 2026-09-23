@@ -1007,17 +1007,20 @@ mod tests {
 
     struct SettingsGuard {
         previous: AppSettings,
+        // 后声明 => 后 drop，保证 `previous` 写回时仍在沙箱内。
+        _sandbox: crate::test_support::ConfigDirSandbox,
     }
 
     impl SettingsGuard {
         fn with_openclaw_dir(path: &std::path::Path) -> Self {
+            let _sandbox = crate::test_support::ConfigDirSandbox::new();
             let previous = get_settings();
             let settings = AppSettings {
                 openclaw_config_dir: Some(path.display().to_string()),
                 ..Default::default()
             };
             update_settings(settings).expect("set openclaw override dir");
-            Self { previous }
+            Self { previous, _sandbox }
         }
     }
 
@@ -1029,6 +1032,7 @@ mod tests {
 
     struct HomeGuard {
         old_home: Option<std::ffi::OsString>,
+        old_test_home_override: Option<PathBuf>,
         old_userprofile: Option<std::ffi::OsString>,
         old_config_dir: Option<std::ffi::OsString>,
         old_test_home: Option<std::ffi::OsString>,
@@ -1037,6 +1041,7 @@ mod tests {
     impl HomeGuard {
         fn set(home: &Path) -> Self {
             let old_home = std::env::var_os("HOME");
+            let old_test_home_override = crate::test_support::test_home_override();
             let old_userprofile = std::env::var_os("USERPROFILE");
             let old_config_dir = std::env::var_os("CC_SWITCH_CONFIG_DIR");
             let old_test_home = std::env::var_os("CC_SWITCH_TEST_HOME");
@@ -1048,6 +1053,7 @@ mod tests {
             crate::settings::reload_test_settings();
             Self {
                 old_home,
+                old_test_home_override,
                 old_userprofile,
                 old_config_dir,
                 old_test_home,
@@ -1073,7 +1079,7 @@ mod tests {
                 Some(value) => std::env::set_var("CC_SWITCH_TEST_HOME", value),
                 None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
             }
-            set_test_home_override(self.old_home.as_deref().map(Path::new));
+            set_test_home_override(self.old_test_home_override.as_deref());
             crate::settings::reload_test_settings();
         }
     }

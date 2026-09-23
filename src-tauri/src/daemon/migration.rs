@@ -11,9 +11,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::path::Path;
 use std::process::{Command, Stdio};
+use std::str::FromStr;
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::app_config::AppType;
 use crate::database::Database;
 
 use super::ipc::client;
@@ -108,17 +110,18 @@ impl ResumePlan {
         environment: Vec<(OsString, OsString)>,
     ) -> Self {
         let mut targets: BTreeMap<String, Option<String>> = BTreeMap::new();
+        // 恢复目标必须只来自本构建保留、且真能被代理接管的 harness。
+        // `takeovers.gemini` 字段在旧数据库里可能就是 true，把它排成恢复目标等于
+        // 数据库迁移后重启 daemon、再给一个已删 harness 拉一个 proxy worker 起来。
         if takeovers.claude {
             targets.insert("claude".to_string(), None);
         }
         if takeovers.codex {
             targets.insert("codex".to_string(), None);
         }
-        if takeovers.gemini {
-            targets.insert("gemini".to_string(), None);
-        }
         for worker in workers {
-            if !matches!(worker.app_type.as_str(), "claude" | "codex" | "gemini") {
+            let app_type = AppType::from_str(&worker.app_type).ok();
+            if !app_type.is_some_and(|app| app.supports_failover()) {
                 continue;
             }
             let fallback = worker

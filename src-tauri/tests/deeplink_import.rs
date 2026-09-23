@@ -8,6 +8,18 @@ use cc_switch_lib::{
 mod support;
 use support::{ensure_test_home, lock_test_mutex, reset_test_fs, state_from_config};
 
+/// 报错文案里"合法取值"那一段。
+///
+/// 文案末尾会回显用户输入的那个 id（这是应该的），所以断言只能落在列举合法值的
+/// 部分——那才是本构建对外的 harness 清单。形式固定为
+/// `... must be one of <list>, got '<input>'`。
+fn advertised_app_ids(message: &str) -> &str {
+    let (_, rest) = message
+        .split_once("must be one of ")
+        .unwrap_or_else(|| panic!("rejection should list the supported app ids: {message}"));
+    rest.split(", got ").next().unwrap_or(rest)
+}
+
 #[test]
 fn deeplink_import_claude_provider_persists_to_config() {
     let _guard = lock_test_mutex();
@@ -196,148 +208,57 @@ fn deeplink_import_codex_provider_preserves_display_name_in_config() {
     );
 }
 
+/// OpenClaw 已从本构建移除，深链 URL 必须在这一关就被拒掉。
+///
+/// 上游这三条 openclaw provider 测试断言的是导入成功后的字段形状。那条路径没了：
+/// `import_provider_from_deeplink` 拿到 openclaw 会走到 `ProviderService::add`，
+/// 而它在新供应商成为"当前"时把 live 配置写进 `~/.openclaw/openclaw.json`
+/// （OpenClaw 的写入没有 `should_sync_live` 门槛）——正是清理要堵住的行为。
+/// 更深的 `canonicalize_openclaw_config` 校验改由 `deeplink::provider` 的单元
+/// 测试直接覆盖，因为它已经不可能从 URL 到达了。
 #[test]
-fn deeplink_import_openclaw_provider_defaults_to_openai_completions_api() {
+fn deeplink_import_rejects_removed_harness_provider_links() {
     let _guard = lock_test_mutex();
     reset_test_fs();
-    let _home = ensure_test_home();
+    let home = ensure_test_home();
 
-    let url = "ccswitch://v1/import?resource=provider&app=openclaw&name=DeepLink%20OpenClaw&homepage=https%3A%2F%2Fopenclaw.example&endpoint=https%3A%2F%2Fapi.openclaw.example%2Fv1&apiKey=sk-test-openclaw-key&model=gpt-4.1";
-    let request = parse_deeplink_url(url).expect("parse deeplink url");
-
-    let mut config = MultiAppConfig::default();
-    config.ensure_app(&AppType::OpenClaw);
-
-    let state = state_from_config(config);
-
-    let provider_id = import_provider_from_deeplink(&state, request.clone())
-        .expect("import provider from deeplink");
-
-    let guard = state.config.read().expect("read config");
-    let manager = guard
-        .get_manager(&AppType::OpenClaw)
-        .expect("openclaw manager should exist");
-    let provider = manager
-        .providers
-        .get(&provider_id)
-        .expect("provider created via deeplink");
-    assert_eq!(provider.name, request.name.clone().expect("request name"));
-    assert_eq!(provider.website_url.as_deref(), request.homepage.as_deref());
-    assert_eq!(
-        provider.settings_config["api"].as_str(),
-        Some("openai-completions")
-    );
-    assert_eq!(
-        provider.settings_config["apiKey"].as_str(),
-        request.api_key.as_deref()
-    );
-    assert_eq!(
-        provider.settings_config["baseUrl"].as_str(),
-        request.endpoint.as_deref()
-    );
-    assert_eq!(
-        provider.settings_config["models"][0]["id"].as_str(),
-        request.model.as_deref()
-    );
-    drop(guard);
-
-    let persisted = state
-        .db
-        .get_provider_by_id(&provider_id, AppType::OpenClaw.as_str())
-        .expect("read provider from db");
-    assert!(persisted.is_some(), "provider should be persisted to db");
-}
-
-#[test]
-fn deeplink_import_openclaw_provider_preserves_canonical_inline_config() {
-    let _guard = lock_test_mutex();
-    reset_test_fs();
-    let _home = ensure_test_home();
-
-    let config_json = r#"{"apiKey":"sk-config-openclaw","baseUrl":"https://config.openclaw.example/v1","api":"openai","headers":{"X-Trace":"1"},"models":[{"id":"config-model","name":"Config Model","contextWindow":128000}]}"#;
-    let config_b64 = BASE64_URL_SAFE_NO_PAD.encode(config_json.as_bytes());
-
-    let url = format!(
-        "ccswitch://v1/import?resource=provider&app=openclaw&name=Config%20OpenClaw&config={config_b64}&configFormat=json"
-    );
-    let request = parse_deeplink_url(&url).expect("parse deeplink url");
-
-    let mut config = MultiAppConfig::default();
-    config.ensure_app(&AppType::OpenClaw);
-
-    let state = state_from_config(config);
-
-    let provider_id =
-        import_provider_from_deeplink(&state, request).expect("import provider from deeplink");
-
-    let guard = state.config.read().expect("read config");
-    let manager = guard
-        .get_manager(&AppType::OpenClaw)
-        .expect("openclaw manager should exist");
-    let provider = manager
-        .providers
-        .get(&provider_id)
-        .expect("provider created via deeplink");
-
-    assert_eq!(provider.settings_config["apiKey"], "sk-config-openclaw");
-    assert_eq!(
-        provider.settings_config["baseUrl"],
-        "https://config.openclaw.example/v1"
-    );
-    assert_eq!(provider.settings_config["api"], "openai");
-    assert_eq!(provider.settings_config["headers"]["X-Trace"], "1");
-    assert_eq!(provider.settings_config["models"][0]["id"], "config-model");
-    assert_eq!(
-        provider.settings_config["models"][0]["contextWindow"],
-        128000
-    );
-}
-
-#[test]
-fn deeplink_import_openclaw_provider_rejects_invalid_inline_config() {
-    let _guard = lock_test_mutex();
-
-    let cases: &[(&str, &str, &str)] = &[
-        // (case label, invalid config JSON, expected error fragment)
-        (
-            "legacy alias fields (api_key, base_url, options)",
-            r#"{"api_key":"sk-legacy","base_url":"https://legacy.example/v1","options":{"apiKey":"sk-alias","baseURL":"https://alias.example/v1"},"models":[{"id":"m"}]}"#,
-            "api_key",
-        ),
-        (
-            "legacy context_window alias on model",
-            r#"{"apiKey":"sk","baseUrl":"https://example.com/v1","models":[{"id":"m","context_window":128000}]}"#,
-            "context_window",
-        ),
-        (
-            "models field is object instead of array",
-            r#"{"apiKey":"sk","baseUrl":"https://example.com/v1","models":{"id":"m"}}"#,
-            "invalid OpenClaw provider schema",
-        ),
-    ];
-
-    for (label, config_json, expected_err) in cases {
-        reset_test_fs();
-        let _home = ensure_test_home();
-
-        let config_b64 = BASE64_URL_SAFE_NO_PAD.encode(config_json.as_bytes());
+    for app in ["gemini", "opencode", "openclaw"] {
         let url = format!(
-            "ccswitch://v1/import?resource=provider&app=openclaw&name=BadConfig&config={config_b64}&configFormat=json"
+            "ccswitch://v1/import?resource=provider&app={app}&name=Gone&homepage=https%3A%2F%2Fexample.com&endpoint=https%3A%2F%2Fapi.example.com%2Fv1&apiKey=sk-test-key"
         );
-        let request =
-            parse_deeplink_url(&url).unwrap_or_else(|e| panic!("[{label}] parse failed: {e}"));
 
-        let mut config = MultiAppConfig::default();
-        config.ensure_app(&AppType::OpenClaw);
-        let state = state_from_config(config);
-
-        let err = match import_provider_from_deeplink(&state, request) {
-            Err(e) => e,
-            Ok(_) => panic!("[{label}] should have rejected config but succeeded"),
-        };
+        let err = parse_deeplink_url(&url)
+            .expect_err(&format!("{app} provider link must not parse in this build"));
+        let rendered = err.to_string();
         assert!(
-            err.to_string().contains(expected_err),
-            "[{label}] expected error containing '{expected_err}', got: {err}"
+            rendered.contains("Invalid app type"),
+            "unexpected parser error for {app}: {rendered}"
+        );
+        // 报错文案不能再把已删 harness 当合法值列出来——URL 是第三方分发的，
+        // 这里列什么，用户就会去试什么。（文案末尾会回显用户输入的那个 id，
+        // 所以只断言列举合法值的那一段。）
+        let advertised = advertised_app_ids(&rendered);
+        assert_eq!(
+            advertised, "claude, codex, hermes",
+            "advertised provider app ids changed for {app}"
+        );
+        for removed in ["gemini", "opencode", "openclaw"] {
+            assert!(
+                !advertised.contains(removed),
+                "rejection for {app} still advertises {removed}: {rendered}"
+            );
+        }
+    }
+
+    for relative in [
+        ".openclaw/openclaw.json",
+        ".openclaw/AGENTS.md",
+        ".gemini/settings.json",
+        ".config/opencode/opencode.json",
+    ] {
+        assert!(
+            !home.join(relative).exists(),
+            "{relative} must not exist after a rejected deep link"
         );
     }
 }
@@ -403,16 +324,56 @@ fn deeplink_import_mcp_server_persists_with_app_flags() {
     );
 }
 
+/// `apps=` 只接受本构建能真正投影 MCP 的 harness。
+///
+/// 上游这里断言的是"openclaw-only 会晚一步报 'At least one app'"，因为 parser
+/// 那时还认 openclaw、`parse_mcp_apps` 再静默丢掉它。现在两关都拒：parser
+/// 先看到不认识的 id，`parse_mcp_apps` 作为库侧兜底也不放它过去（`McpApps`
+/// 保留 `gemini`/`opencode` 位只是为了读旧数据库，不是为了在深链里用）。
 #[test]
-fn deeplink_import_mcp_apps_openclaw_only_fails_with_apps_required() {
+fn deeplink_import_mcp_rejects_removed_or_unsupported_app_ids() {
     let _guard = lock_test_mutex();
     reset_test_fs();
     let _home = ensure_test_home();
 
     let config_json = r#"{"mcpServers":{"test-server":{"command":"echo","args":["hi"]}}}"#;
     let config_b64 = BASE64_URL_SAFE_NO_PAD.encode(config_json.as_bytes());
-    let url = format!("ccswitch://v1/import?resource=mcp&apps=openclaw&config={config_b64}");
-    let request = parse_deeplink_url(&url).expect("openclaw passes parser-level app validation");
+
+    for app in ["openclaw", "gemini", "opencode", "pi"] {
+        let url = format!("ccswitch://v1/import?resource=mcp&apps={app}&config={config_b64}");
+        let err = parse_deeplink_url(&url)
+            .expect_err(&format!("apps={app} must be rejected by the parser"));
+        let rendered = err.to_string();
+        assert!(
+            rendered.contains("Invalid app in 'apps'"),
+            "unexpected parser error for apps={app}: {rendered}"
+        );
+        let advertised = advertised_app_ids(&rendered);
+        assert_eq!(
+            advertised, "claude, codex, hermes",
+            "advertised MCP app ids changed for apps={app}"
+        );
+        for removed in ["gemini", "opencode", "openclaw"] {
+            assert!(
+                !advertised.contains(removed),
+                "rejection for apps={app} still advertises {removed}: {rendered}"
+            );
+        }
+    }
+}
+
+#[test]
+fn deeplink_import_mcp_requires_at_least_one_app() {
+    let _guard = lock_test_mutex();
+    reset_test_fs();
+    let _home = ensure_test_home();
+
+    let config_json = r#"{"mcpServers":{"test-server":{"command":"echo","args":["hi"]}}}"#;
+    let config_b64 = BASE64_URL_SAFE_NO_PAD.encode(config_json.as_bytes());
+    let url = format!("ccswitch://v1/import?resource=mcp&apps=&config={config_b64}");
+
+    // 空白 id 走的是"一个 app 都没给"这条分支，不是"不认识的 id"。
+    let request = parse_deeplink_url(&url).expect("whitespace apps pass parser validation");
 
     let mut config = MultiAppConfig::default();
     config.ensure_app(&AppType::Claude);
@@ -420,7 +381,7 @@ fn deeplink_import_mcp_apps_openclaw_only_fails_with_apps_required() {
 
     let err = match import_mcp_from_deeplink(&state, request) {
         Err(e) => e,
-        Ok(_) => panic!("openclaw-only apps should have failed"),
+        Ok(_) => panic!("blank apps should have failed"),
     };
     assert!(
         err.to_string()

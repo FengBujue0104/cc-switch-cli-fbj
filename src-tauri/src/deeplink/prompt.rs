@@ -8,8 +8,6 @@ use crate::error::AppError;
 use crate::prompt::Prompt;
 use crate::services::PromptService;
 use crate::store::AppState;
-use crate::AppType;
-use std::str::FromStr;
 
 /// Import a prompt from deep link request
 pub fn import_prompt_from_deeplink(
@@ -34,9 +32,10 @@ pub fn import_prompt_from_deeplink(
         .name
         .ok_or_else(|| AppError::InvalidInput("Missing 'name' field for prompt".to_string()))?;
 
-    // Parse app type
-    let app_type = AppType::from_str(app_str)
-        .map_err(|_| AppError::InvalidInput(format!("Invalid app type: {app_str}")))?;
+    // Parse app type. The gate matters more here than anywhere else in the
+    // protocol: `PromptService::enable_prompt` writes the prompt file for whatever
+    // app it is handed, and for Gemini that path is `~/.gemini/GEMINI.md`.
+    let app_type = super::parse_deeplink_app(app_str, "prompt")?;
 
     // Decode content
     let content_b64 = request

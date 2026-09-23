@@ -591,6 +591,7 @@ mod tests {
     use std::collections::HashMap;
     use std::ffi::OsString;
     use std::path::Path;
+    use std::path::PathBuf;
 
     use serde_json::json;
     use serial_test::serial;
@@ -611,6 +612,7 @@ mod tests {
     struct EnvGuard {
         _lock: TestHomeSettingsLock,
         old_home: Option<OsString>,
+        old_test_home_override: Option<PathBuf>,
         old_userprofile: Option<OsString>,
         old_config_dir: Option<OsString>,
         old_claude_config_dir: Option<OsString>,
@@ -621,6 +623,7 @@ mod tests {
         fn set_home(home: &Path) -> Self {
             let lock = lock_test_home_and_settings();
             let old_home = std::env::var_os("HOME");
+            let old_test_home_override = crate::test_support::test_home_override();
             let old_userprofile = std::env::var_os("USERPROFILE");
             let old_config_dir = std::env::var_os("CC_SWITCH_CONFIG_DIR");
             let old_claude_config_dir = std::env::var_os("CLAUDE_CONFIG_DIR");
@@ -635,6 +638,7 @@ mod tests {
             Self {
                 _lock: lock,
                 old_home,
+                old_test_home_override,
                 old_userprofile,
                 old_config_dir,
                 old_claude_config_dir,
@@ -665,7 +669,7 @@ mod tests {
                 Some(value) => std::env::set_var("CODEX_HOME", value),
                 None => std::env::remove_var("CODEX_HOME"),
             }
-            set_test_home_override(self.old_home.as_deref().map(Path::new));
+            set_test_home_override(self.old_test_home_override.as_deref());
             crate::settings::reload_test_settings();
         }
     }
@@ -1455,6 +1459,7 @@ mod tests {
 
     #[test]
     #[serial(home_settings)]
+    #[ignore = "OpenCode harness removed from this build: additive provider switching no longer applies to it"]
     fn opencode_switch_toggles_config_membership_without_current_provider() {
         let temp_home = TempDir::new().expect("create temp home");
         let _env = EnvGuard::set_home(temp_home.path());
@@ -2391,6 +2396,7 @@ mod tests {
 
     #[test]
     #[serial(home_settings)]
+    #[ignore = "OpenClaw harness removed from this build: remove-from-live-config is additive-only and OpenClaw is no longer additive"]
     fn openclaw_remove_from_config_rejects_default_provider_even_without_ui_guard() {
         let temp_home = TempDir::new().expect("create temp home");
         let _env = EnvGuard::set_home(temp_home.path());
@@ -2450,6 +2456,7 @@ mod tests {
 
     #[test]
     #[serial(home_settings)]
+    #[ignore = "OpenClaw harness removed from this build: remove-from-live-config is additive-only and OpenClaw is no longer additive"]
     fn openclaw_remove_from_config_keeps_removed_provider_visible_for_re_add() {
         let temp_home = TempDir::new().expect("create temp home");
         let _env = EnvGuard::set_home(temp_home.path());

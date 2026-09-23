@@ -122,9 +122,10 @@ pub(super) fn validate(ctx: &mut RuntimeActionContext<'_>) -> Result<(), AppErro
     }
 
     let db = crate::Database::init()?;
+    // 只统计留着的 harness。Gemini 那行以前会在这里把旧库里的残留供应商数报给用户，
+    // 已删 harness 不该再出现在任何可见列表里。
     let claude_count = db.get_all_providers("claude")?.len();
     let codex_count = db.get_all_providers("codex")?.len();
-    let gemini_count = db.get_all_providers("gemini")?.len();
     let mcp_count = db.get_all_mcp_servers()?.len();
 
     let lines = vec![
@@ -132,7 +133,6 @@ pub(super) fn validate(ctx: &mut RuntimeActionContext<'_>) -> Result<(), AppErro
         String::new(),
         texts::tui_config_validation_provider_count(AppType::Claude.as_str(), claude_count),
         texts::tui_config_validation_provider_count(AppType::Codex.as_str(), codex_count),
-        texts::tui_config_validation_provider_count(AppType::Gemini.as_str(), gemini_count),
         texts::tui_config_validation_mcp_servers(mcp_count),
     ];
     ctx.app.overlay = Overlay::TextView(TextViewState {

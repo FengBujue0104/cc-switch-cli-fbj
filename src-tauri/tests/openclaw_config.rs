@@ -5,7 +5,7 @@ use serial_test::serial;
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 mod error {
     use std::path::Path;
@@ -76,10 +76,25 @@ mod config {
     use crate::error::AppError;
 
     pub fn home_dir() -> Option<PathBuf> {
-        crate::test_support::test_home_override().or_else(dirs::home_dir)
+        if let Some(override_dir) = crate::test_support::test_home_override() {
+            return Some(override_dir);
+        }
+        // 和真实的 `src/config.rs::home_dir()` 一致：`CC_SWITCH_TEST_HOME` 优先于
+        // 平台 home。少了这一层，只在环境变量里做了隔离的 fixture 会掉到
+        // `dirs::home_dir()`，在 Windows 上就是真实的 `%USERPROFILE%`。
+        if let Some(test_home) = std::env::var_os("CC_SWITCH_TEST_HOME") {
+            return Some(PathBuf::from(test_home));
+        }
+        dirs::home_dir()
     }
 
     pub fn get_app_config_dir() -> PathBuf {
+        if let Some(custom) = std::env::var_os("CC_SWITCH_CONFIG_DIR") {
+            let custom = PathBuf::from(custom);
+            if !custom.to_string_lossy().trim().is_empty() {
+                return custom;
+            }
+        }
         home_dir()
             .unwrap_or_else(|| PathBuf::from("."))
             .join(".cc-switch")
@@ -280,6 +295,40 @@ mod test_support {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clone()
     }
+
+    /// Mirrors `crate::test_support::ConfigDirSandbox` so the real
+    /// `src/openclaw_config.rs` test module compiles unchanged inside this target.
+    ///
+    /// 和真实的 `src/test_support.rs` 实现保持一字不差的行为：**新建临时目录并写进
+    /// `CC_SWITCH_CONFIG_DIR`**，而不是把变量删掉。删掉会让 `get_app_config_dir()`
+    /// 回落到 `home_dir()`，在 Windows 上就是真实的 `%USERPROFILE%\.cc-switch`——
+    /// 于是 `create_openclaw_backup()` 把测试用的 openclaw 备份写进用户真实的
+    /// `~/.cc-switch/backups/`。
+    pub(crate) struct ConfigDirSandbox {
+        _temp: tempfile::TempDir,
+        old: Option<std::ffi::OsString>,
+    }
+
+    impl ConfigDirSandbox {
+        pub(crate) fn new() -> Self {
+            let temp = tempfile::Builder::new()
+                .prefix("ccs-cfg-")
+                .tempdir()
+                .expect("create test config dir sandbox");
+            let old = std::env::var_os("CC_SWITCH_CONFIG_DIR");
+            std::env::set_var("CC_SWITCH_CONFIG_DIR", temp.path());
+            Self { _temp: temp, old }
+        }
+    }
+
+    impl Drop for ConfigDirSandbox {
+        fn drop(&mut self) {
+            match &self.old {
+                Some(value) => std::env::set_var("CC_SWITCH_CONFIG_DIR", value),
+                None => std::env::remove_var("CC_SWITCH_CONFIG_DIR"),
+            }
+        }
+    }
 }
 
 #[path = "../src/openclaw_config.rs"]
@@ -298,6 +347,8 @@ struct FixtureGuard {
     _temp: TempDir,
     old_home: Option<OsString>,
     old_test_home: Option<OsString>,
+    old_test_home_override: Option<PathBuf>,
+    old_config_dir: Option<OsString>,
     old_settings: AppSettings,
 }
 
@@ -310,10 +361,20 @@ impl FixtureGuard {
 
         let old_home = std::env::var_os("HOME");
         let old_test_home = std::env::var_os("CC_SWITCH_TEST_HOME");
+        let old_config_dir = std::env::var_os("CC_SWITCH_CONFIG_DIR");
+        // 只设 `HOME` 是不够的：Windows 上 `dirs::home_dir()` 走
+        // `SHGetKnownFolderPath`，根本不看 `HOME`。`home_dir()` 的三个来源
+        // （`test_home_override` → `CC_SWITCH_TEST_HOME` → 平台 home）和
+        // `get_app_config_dir()` 读的 `CC_SWITCH_CONFIG_DIR` 必须一起指向临时目录，
+        // 否则 openclaw 备份会写进用户真实的 `%USERPROFILE%\.cc-switch\backups`。
+        let old_test_home_override = crate::test_support::test_home_override();
         let old_settings = get_settings();
 
         std::env::set_var("HOME", temp.path());
+        std::env::set_var("USERPROFILE", temp.path());
         std::env::set_var("CC_SWITCH_TEST_HOME", temp.path());
+        std::env::set_var("CC_SWITCH_CONFIG_DIR", temp.path().join(".cc-switch"));
+        crate::test_support::set_test_home_override(Some(temp.path()));
 
         update_settings(AppSettings {
             openclaw_config_dir: Some(openclaw_dir.display().to_string()),
@@ -325,6 +386,8 @@ impl FixtureGuard {
             _temp: temp,
             old_home,
             old_test_home,
+            old_test_home_override,
+            old_config_dir,
             old_settings,
         }
     }
@@ -343,6 +406,14 @@ impl Drop for FixtureGuard {
         } else {
             std::env::remove_var("CC_SWITCH_TEST_HOME");
         }
+
+        if let Some(value) = self.old_config_dir.take() {
+            std::env::set_var("CC_SWITCH_CONFIG_DIR", value);
+        } else {
+            std::env::remove_var("CC_SWITCH_CONFIG_DIR");
+        }
+
+        crate::test_support::set_test_home_override(self.old_test_home_override.as_deref());
 
         update_settings(self.old_settings.clone()).expect("restore settings");
     }

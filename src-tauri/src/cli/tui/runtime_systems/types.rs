@@ -481,9 +481,6 @@ pub(crate) enum SkillsReq {
     Update {
         ids: Vec<String>,
     },
-    MigrateStorage {
-        target: crate::services::skill::SkillStorageLocation,
-    },
 }
 
 pub(crate) enum SkillsMsg {
@@ -502,10 +499,6 @@ pub(crate) enum SkillsMsg {
     },
     SkillsUpdated {
         result: Result<crate::services::skill::SkillUpdateBatchResult, String>,
-    },
-    StorageMigrated {
-        target: crate::services::skill::SkillStorageLocation,
-        result: Result<crate::services::skill::MigrationResult, String>,
     },
 }
 

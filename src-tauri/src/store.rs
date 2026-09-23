@@ -228,20 +228,19 @@ impl AppState {
         }
     }
 
+    /// 启动时把 live 配置里的供应商同步进数据库。
+    ///
+    /// 只同步 `AppType::all()` 内的 harness。OpenCode/OpenClaw 的 live 导入
+    /// （`ProviderService::import_opencode_providers_from_live` /
+    /// `import_openclaw_providers_from_live`）保留但不再在启动时调用：这两个
+    /// harness 已从本构建移除，自动导入是"已删 harness 反复复活"的入口，同时也
+    /// 会把 live 里的密钥读进数据库。函数保留是为了兼容库里已存在的旧数据，
+    /// 相关行为仍由集成测试覆盖。
     fn import_live_provider_configs_on_startup(&self) -> Result<(), AppError> {
         match self.db.init_default_official_providers() {
             Ok(count) if count > 0 => log::info!("✓ Seeded {count} official provider(s)"),
             Ok(_) => {}
             Err(error) => log::warn!("✗ Failed to seed official providers: {error}"),
-        }
-
-        match crate::services::provider::ProviderService::import_opencode_providers_from_live(self)
-        {
-            Ok(count) if count > 0 => {
-                log::info!("✓ Imported {count} OpenCode provider(s) from live config");
-            }
-            Ok(_) => log::debug!("○ No new OpenCode providers to import"),
-            Err(error) => log::warn!("✗ Failed to import OpenCode providers: {error}"),
         }
 
         match crate::services::provider::ProviderService::import_hermes_providers_from_live(self) {
@@ -250,15 +249,6 @@ impl AppState {
             }
             Ok(_) => log::debug!("○ No new Hermes providers to import"),
             Err(error) => log::warn!("✗ Failed to import Hermes providers: {error}"),
-        }
-
-        match crate::services::provider::ProviderService::import_openclaw_providers_from_live(self)
-        {
-            Ok(count) if count > 0 => {
-                log::info!("✓ Imported {count} OpenClaw provider(s) from live config");
-            }
-            Ok(_) => log::debug!("○ No new OpenClaw providers to import"),
-            Err(error) => log::warn!("✗ Failed to import OpenClaw providers: {error}"),
         }
 
         match crate::services::provider::ProviderService::import_pi_providers_from_live(self) {
@@ -281,13 +271,19 @@ impl AppState {
     /// （`apply_common_config_to_settings` / `remove_common_config_from_settings`）
     /// 是 no-op，自动播种对它们没有实际效果，反而可能把整份 live 配置（含密钥）
     /// 复制进 `common_config_<app>`。
+    ///
+    /// Gemini 同样不在此列：本构建只保留 Claude/Codex/Hermes/Pi，给已删 harness
+    /// 播种只会把 `~/.gemini/.env` 里的密钥吸进数据库再无人消费。磁盘上遗留的
+    /// `common_config_gemini` 数据保持原样，不做删除也不做覆写。
     fn initialize_common_config_snippets(&self) {
         use crate::app_config::AppType;
         use crate::services::provider::ProviderService;
 
         let mut seeded = false;
 
-        for app_type in [AppType::Claude, AppType::Codex, AppType::Gemini] {
+        // 只覆盖 `AppType::all()` 中真正会切换当前供应商的 harness：additive
+        // 模式（Hermes/Pi）不走当前供应商切换，通用片段由各自流程处理。
+        for app_type in AppType::all().filter(|app| !app.is_additive_mode()) {
             match self
                 .db
                 .should_auto_extract_config_snippet(app_type.as_str())
@@ -927,6 +923,10 @@ wire_api = "responses"
         let temp_home = TempDir::new().expect("create temp home");
         let _env = TestEnvGuard::isolated(temp_home.path());
 
+        let mut settings = crate::settings::get_settings();
+        settings.unify_codex_session_history = false;
+        crate::settings::update_settings(settings).expect("disable unified Codex history");
+
         {
             let state = AppState::try_new_with_startup_recovery().expect("seed startup state");
             let mut third_party = Provider::with_id(
@@ -1076,7 +1076,6 @@ requires_openai_auth = true
         for (app, provider_id, name) in [
             ("claude", "claude-official", "Claude Official"),
             ("codex", "codex-official", "OpenAI Official"),
-            ("gemini", "gemini-official", "Google Official"),
         ] {
             let provider = state
                 .db
@@ -1086,6 +1085,17 @@ requires_openai_auth = true
             assert_eq!(provider.name, name);
             assert_eq!(provider.category.as_deref(), Some("official"));
         }
+
+        // Gemini 已从本构建移除，官方种子只覆盖 `AppType::all()`：全新安装不该
+        // 再长出一行没人能消费的 Gemini 供应商，否则它会随导出/备份一直传下去。
+        assert!(
+            state
+                .db
+                .get_provider_by_id("gemini-official", "gemini")
+                .expect("read gemini official provider")
+                .is_none(),
+            "removed harnesses must not be seeded as official providers"
+        );
     }
 
     #[test]
@@ -1198,7 +1208,7 @@ requires_openai_auth = true
 
     #[test]
     #[serial(home_settings)]
-    fn startup_seeds_gemini_common_config_snippet_from_live() {
+    fn startup_refuses_to_seed_gemini_common_config_from_live() {
         let temp_home = TempDir::new().expect("create temp home");
         let _env = TestEnvGuard::isolated(temp_home.path());
 
@@ -1209,29 +1219,24 @@ requires_openai_auth = true
 
         let state = AppState::try_new_with_startup_recovery().expect("create startup state");
 
-        let snippet = state
-            .db
-            .get_config_snippet("gemini")
-            .expect("read snippet")
-            .expect("gemini snippet should be seeded");
-        let parsed: serde_json::Value = serde_json::from_str(&snippet).expect("snippet json");
-        assert_eq!(
-            parsed.get("HTTPS_PROXY"),
-            Some(&json!("http://proxy.local:8080"))
+        // Gemini 已从本构建中移除：播种列表只覆盖 `AppType::all()`，所以既不给它
+        // 建 snippet，也不把它导成供应商。这里把两条都钉住——任何一方回归都意味着
+        // `~/.gemini` 里的密钥会被重新吸进数据库。
+        assert!(
+            state
+                .db
+                .get_config_snippet("gemini")
+                .expect("read gemini snippet")
+                .is_none(),
+            "removed harnesses must not get an auto-seeded common config snippet"
         );
-        // 鉴权/endpoint 字段不进通用配置
-        assert!(parsed.get("GEMINI_API_KEY").is_none());
-        assert!(parsed.get("GOOGLE_GEMINI_BASE_URL").is_none());
-
-        // 非破坏式：default 供应商仍保留完整 settings
-        let provider = state
-            .db
-            .get_provider_by_id("default", "gemini")
-            .expect("read provider")
-            .expect("default provider");
-        assert_eq!(
-            provider.settings_config["env"]["GEMINI_API_KEY"],
-            json!("live-key")
+        assert!(
+            state
+                .db
+                .get_provider_by_id("default", "gemini")
+                .expect("read provider")
+                .is_none(),
+            "removed harnesses must not be imported as providers on startup"
         );
     }
 

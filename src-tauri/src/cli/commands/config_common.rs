@@ -15,7 +15,7 @@ pub enum CommonConfigCommand {
     Show,
     /// Format a common config snippet and print the normalized result
     Format {
-        /// Inline snippet text (Claude/Gemini/OpenCode/OpenClaw: JSON object; Codex: TOML)
+        /// Inline snippet text (Claude/Hermes: JSON object; Codex: TOML)
         #[arg(long = "snippet", value_name = "SNIPPET", conflicts_with = "file")]
         snippet: Option<String>,
 
@@ -46,7 +46,7 @@ pub enum CommonConfigCommand {
         after_long_help = "Compatibility:\n  --json <SNIPPET>  Legacy alias for --snippet <SNIPPET>."
     )]
     Set {
-        /// Inline snippet text (Claude/Gemini/OpenCode: JSON object; Codex: TOML)
+        /// Inline snippet text (Claude/Hermes: JSON object; Codex: TOML)
         #[arg(
             long = "snippet",
             alias = "json",
@@ -665,18 +665,6 @@ mod tests {
     }
 
     #[test]
-    fn set_rejects_non_object_opencode_common_snippet() {
-        let err = set(AppType::OpenCode, Some("[]"), None, false)
-            .expect_err("OpenCode common snippet should require a JSON object");
-
-        assert!(
-            err.to_string()
-                .contains(texts::common_config_snippet_not_object()),
-            "unexpected error: {err}"
-        );
-    }
-
-    #[test]
     fn no_current_provider_message_preserves_saved_copy_for_set() {
         assert_eq!(
             no_current_provider_message(CommonConfigSnippetAction::Set),
@@ -694,7 +682,25 @@ mod tests {
 
     #[test]
     fn follow_up_message_is_omitted_for_additive_apps() {
-        assert!(follow_up_message(AppType::OpenCode, CommonConfigSnippetAction::Set, "").is_none());
+        for app in [AppType::Hermes, AppType::Pi] {
+            assert!(
+                follow_up_message(app.clone(), CommonConfigSnippetAction::Set, "").is_none(),
+                "{} is additive in this build and has no current provider to report",
+                app.as_str()
+            );
+        }
+    }
+
+    #[test]
+    fn set_rejects_non_object_hermes_common_snippet() {
+        let err = set(AppType::Hermes, Some("[]"), None, false)
+            .expect_err("Hermes common snippet should require a JSON object");
+
+        assert!(
+            err.to_string()
+                .contains(texts::common_config_snippet_not_object()),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]

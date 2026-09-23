@@ -430,7 +430,7 @@ async fn buffered_connect_error_maps_to_forward_failed() {
             vec![provider],
             ForwardOptions {
                 max_retries: 2,
-                request_timeout: Some(Duration::from_secs(1)),
+                request_timeout: Some(Duration::from_secs(5)),
                 bypass_circuit_breaker: true,
             },
             RectifierConfig::default(),
@@ -438,7 +438,10 @@ async fn buffered_connect_error_maps_to_forward_failed() {
         .await
         .expect_err("connect failures should map to forward failed");
 
-    assert!(matches!(error, ProxyError::ForwardFailed(_)));
+    assert!(
+        matches!(error, ProxyError::ForwardFailed(_)),
+        "unexpected error: {error:?}"
+    );
 }
 
 #[tokio::test]

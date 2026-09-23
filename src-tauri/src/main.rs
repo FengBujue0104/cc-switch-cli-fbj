@@ -205,7 +205,6 @@ mod tests {
             "official",
             "/tmp/codex-home",
         ]);
-        let sessions = Cli::parse_from(["cc-switch", "sessions", "list"]);
         let auth = Cli::parse_from(["cc-switch", "auth", "status"]);
         let codex_auth_preservation =
             Cli::parse_from(["cc-switch", "settings", "codex-auth-preservation", "show"]);
@@ -223,7 +222,6 @@ mod tests {
             &completions_uninstall.command
         ));
         assert!(!command_requires_startup_state(&internal_capture.command));
-        assert!(!command_requires_startup_state(&sessions.command));
         assert!(!command_requires_startup_state(&auth.command));
         assert!(!command_requires_startup_state(
             &codex_auth_preservation.command
@@ -243,7 +241,6 @@ mod tests {
     #[test]
     fn normal_commands_require_database_access() {
         let provider = Cli::parse_from(["cc-switch", "provider", "list"]);
-        let mcp = Cli::parse_from(["cc-switch", "mcp", "list"]);
         let config = Cli::parse_from(["cc-switch", "config", "validate"]);
         let proxy = Cli::parse_from(["cc-switch", "proxy", "show"]);
         let interactive = Cli::parse_from(["cc-switch"]);
@@ -256,7 +253,6 @@ mod tests {
         ]);
 
         assert!(database_access_required(&provider.command));
-        assert!(database_access_required(&mcp.command));
         assert!(database_access_required(&config.command));
         assert!(database_access_required(&proxy.command));
         assert!(database_access_required(&interactive.command));

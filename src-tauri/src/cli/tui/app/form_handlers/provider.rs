@@ -632,8 +632,18 @@ impl App {
                     let Some(FormState::ProviderAdd(provider)) = self.form.as_ref() else {
                         return Action::None;
                     };
+                    // Pi 表单复用 OpenClaw 的字段变体，这里不能把编辑器标题照抄成
+                    // "OpenClaw 模型列表"——Pi 用户在保留的 harness 上会看到已删
+                    // harness 的名字。同 `ui/forms/provider.rs` 里 NpmPackage 的
+                    // 标签按 app 分流的写法。
+                    let editor_title =
+                        if matches!(provider.app_type, crate::app_config::AppType::Pi) {
+                            texts::tui_label_openclaw_models()
+                        } else {
+                            texts::tui_openclaw_models_editor_title()
+                        };
                     self.open_editor(
-                        texts::tui_openclaw_models_editor_title(),
+                        editor_title,
                         EditorKind::Json,
                         provider.openclaw_models_editor_text(),
                         EditorSubmit::ProviderFormApplyOpenClawModels,

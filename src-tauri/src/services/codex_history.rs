@@ -128,6 +128,7 @@ mod tests {
     fn live_rewrite_failure_rolls_back_toggle_and_migration_intent() {
         let temp_home = TempDir::new().expect("create temp home");
         let _env = TestEnvGuard::isolated(temp_home.path());
+        crate::test_support::disable_unified_codex_session_history();
         let state = crate::store::AppState::try_new().expect("create app state");
         let err = set_unified_session_history_enabled_with(&state, true, true, |_| {
             Err(AppError::Message("forced live rewrite failure".to_string()))

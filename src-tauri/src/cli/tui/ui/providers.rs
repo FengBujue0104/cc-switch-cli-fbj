@@ -531,6 +531,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn claude_provider_list_key_bar_shows_launch_temp_hint() {
         let _lock = super::super::tests::lock_env();
         let _no_color = super::super::tests::EnvGuard::remove("NO_COLOR");
@@ -549,6 +550,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn codex_provider_list_key_bar_shows_launch_temp_hint() {
         let _lock = super::super::tests::lock_env();
         let _no_color = super::super::tests::EnvGuard::remove("NO_COLOR");

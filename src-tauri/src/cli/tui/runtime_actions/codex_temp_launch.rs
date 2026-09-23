@@ -219,7 +219,7 @@ mod tests {
             &mut fixture.ctx(),
             "candidate".to_string(),
             temp_dir.path(),
-            ensure_temp_launch_supported,
+            || Ok(()),
             |provider, temp_dir| {
                 prepare_launch_with(provider, temp_dir, || Ok(PathBuf::from("/usr/bin/codex")))
             },
@@ -267,7 +267,7 @@ mod tests {
             &mut fixture.ctx(),
             "candidate".to_string(),
             temp_dir.path(),
-            ensure_temp_launch_supported,
+            || Ok(()),
             |provider, temp_dir| {
                 prepare_launch_with(provider, temp_dir, || Ok(PathBuf::from("/usr/bin/codex")))
             },

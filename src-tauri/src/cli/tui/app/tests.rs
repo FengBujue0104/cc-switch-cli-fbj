@@ -598,6 +598,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "Skills nav entry removed from this build"]
     fn nav_menu_includes_skills_entry() {
         assert!(
             NavItem::ALL
@@ -897,14 +898,12 @@ mod tests {
         app.on_key(key(KeyCode::Char('m')), &data);
         app.on_key(key(KeyCode::Down), &data);
         app.on_key(key(KeyCode::Down), &data);
-        app.on_key(key(KeyCode::Down), &data);
-        app.on_key(key(KeyCode::Down), &data);
 
         let action = app.on_key(key(KeyCode::Char(' ')), &data);
         assert!(matches!(action, Action::None));
         assert!(matches!(
             &app.overlay,
-            Overlay::SkillsAppsPicker { selected, apps, .. } if *selected == 4 && apps.hermes
+            Overlay::SkillsAppsPicker { selected, apps, .. } if *selected == 2 && apps.hermes
         ));
 
         let action = app.on_key(key(KeyCode::Enter), &data);
@@ -921,8 +920,8 @@ mod tests {
     }
 
     #[test]
-    fn skills_apps_picker_from_openclaw_targets_pi_last_visible_row() {
-        let mut app = App::new(Some(AppType::OpenClaw));
+    fn skills_apps_picker_from_pi_targets_pi_row() {
+        let mut app = App::new(Some(AppType::Pi));
         app.route = Route::Skills;
         app.focus = Focus::Content;
 
@@ -931,11 +930,14 @@ mod tests {
             .installed
             .push(installed_skill("hello-skill", "Hello Skill"));
 
+        // skills picker 渲染 `supported_skill_apps()` == `AppType::all()`，Pi 是第 4 行
+        // （下标 3）。以前那张硬编码序号表把 Pi 记成 5，等于打开时光标悬在列表外面，
+        // 而且真实渲染的第 3 行会和 `Space` 命中的 harness 错位一格。
         let action = app.on_key(key(KeyCode::Char('m')), &data);
         assert!(matches!(action, Action::None));
         assert!(matches!(
             &app.overlay,
-            Overlay::SkillsAppsPicker { selected, .. } if *selected == 5
+            Overlay::SkillsAppsPicker { selected, .. } if *selected == 3
         ));
 
         let action = app.on_key(key(KeyCode::Char(' ')), &data);
@@ -943,45 +945,13 @@ mod tests {
         assert!(matches!(
             &app.overlay,
             Overlay::SkillsAppsPicker { selected, apps, .. }
-                if *selected == 5
+                if *selected == 3
                     && !apps.claude
                     && !apps.codex
                     && !apps.gemini
                     && !apps.opencode
                     && !apps.hermes
                     && apps.pi
-        ));
-    }
-
-    #[test]
-    #[serial(home_settings)]
-    fn visible_apps_picker_can_toggle_pi() {
-        let temp_home = TempDir::new().expect("create temp home");
-        let _env = TestEnvGuard::isolated(temp_home.path());
-        crate::settings::set_visible_apps_mode(crate::settings::VisibleAppsMode::Manual)
-            .expect("save visible apps mode");
-        let mut app = App::new(Some(AppType::Pi));
-        app.overlay = Overlay::VisibleAppsPicker {
-            selected: app_type_picker_index(&AppType::Pi),
-            apps: crate::settings::VisibleApps {
-                claude: true,
-                codex: false,
-                gemini: false,
-                opencode: false,
-                hermes: false,
-                openclaw: false,
-                pi: false,
-            },
-        };
-
-        assert!(matches!(
-            app.on_key(key(KeyCode::Char(' ')), &UiData::default()),
-            Action::None
-        ));
-        assert!(matches!(
-            &app.overlay,
-            Overlay::VisibleAppsPicker { selected, apps }
-                if *selected == 6 && apps.pi
         ));
     }
 
@@ -1158,16 +1128,6 @@ mod tests {
     fn app_cycles_left_right() {
         let temp_home = TempDir::new().expect("create temp home");
         let _env = TestEnvGuard::isolated(temp_home.path());
-        crate::settings::set_visible_apps(crate::settings::VisibleApps {
-            claude: true,
-            codex: true,
-            gemini: true,
-            opencode: true,
-            hermes: false,
-            openclaw: true,
-            pi: false,
-        })
-        .expect("save visible apps");
         let mut app = App::new(Some(AppType::Claude));
         assert!(matches!(
             app.on_key(key(KeyCode::Char(']')), &data()),
@@ -1175,7 +1135,7 @@ mod tests {
         ));
         assert!(matches!(
             app.on_key(key(KeyCode::Char('[')), &data()),
-            Action::SetAppType(AppType::OpenClaw)
+            Action::SetAppType(AppType::Pi)
         ));
     }
 
@@ -1184,16 +1144,6 @@ mod tests {
     fn app_cycles_with_chinese_brackets() {
         let temp_home = TempDir::new().expect("create temp home");
         let _env = TestEnvGuard::isolated(temp_home.path());
-        crate::settings::set_visible_apps(crate::settings::VisibleApps {
-            claude: true,
-            codex: true,
-            gemini: true,
-            opencode: true,
-            hermes: false,
-            openclaw: true,
-            pi: false,
-        })
-        .expect("save visible apps");
         let mut app = App::new(Some(AppType::Claude));
         assert!(matches!(
             app.on_key(key(KeyCode::Char('】')), &data()),
@@ -1201,7 +1151,7 @@ mod tests {
         ));
         assert!(matches!(
             app.on_key(key(KeyCode::Char('【')), &data()),
-            Action::SetAppType(AppType::OpenClaw)
+            Action::SetAppType(AppType::Pi)
         ));
         assert!(matches!(
             app.on_key(key(KeyCode::Char('］')), &data()),
@@ -1209,143 +1159,15 @@ mod tests {
         ));
         assert!(matches!(
             app.on_key(key(KeyCode::Char('［')), &data()),
-            Action::SetAppType(AppType::OpenClaw)
+            Action::SetAppType(AppType::Pi)
         ));
     }
 
     #[test]
     #[serial(home_settings)]
-    fn app_cycles_through_opencode() {
+    fn unsupported_current_app_cycles_back_to_a_supported_harness() {
         let temp_home = TempDir::new().expect("create temp home");
         let _env = TestEnvGuard::isolated(temp_home.path());
-        crate::settings::set_visible_apps(crate::settings::VisibleApps {
-            claude: true,
-            codex: true,
-            gemini: true,
-            opencode: true,
-            hermes: false,
-            openclaw: true,
-            pi: false,
-        })
-        .expect("save visible apps");
-        let mut app = App::new(Some(AppType::Gemini));
-        assert!(matches!(
-            app.on_key(key(KeyCode::Char(']')), &data()),
-            Action::SetAppType(AppType::OpenCode)
-        ));
-
-        let mut app = App::new(Some(AppType::OpenCode));
-        assert!(matches!(
-            app.on_key(key(KeyCode::Char(']')), &data()),
-            Action::SetAppType(AppType::OpenClaw)
-        ));
-        assert!(matches!(
-            app.on_key(key(KeyCode::Char('[')), &data()),
-            Action::SetAppType(AppType::Gemini)
-        ));
-
-        let mut app = App::new(Some(AppType::OpenClaw));
-        assert!(matches!(
-            app.on_key(key(KeyCode::Char(']')), &data()),
-            Action::SetAppType(AppType::Claude)
-        ));
-        assert!(matches!(
-            app.on_key(key(KeyCode::Char('[')), &data()),
-            Action::SetAppType(AppType::OpenCode)
-        ));
-    }
-
-    #[test]
-    #[serial(home_settings)]
-    fn app_cycle_skips_hidden_apps_from_settings() {
-        let temp_home = TempDir::new().expect("create temp home");
-        let _env = TestEnvGuard::isolated(temp_home.path());
-        crate::settings::set_visible_apps(crate::settings::VisibleApps {
-            claude: true,
-            codex: false,
-            gemini: false,
-            opencode: true,
-            hermes: false,
-            openclaw: true,
-            pi: false,
-        })
-        .expect("save visible apps");
-
-        let mut app = App::new(Some(AppType::Claude));
-
-        assert!(matches!(
-            app.on_key(key(KeyCode::Char(']')), &data()),
-            Action::SetAppType(AppType::OpenCode)
-        ));
-    }
-
-    #[test]
-    #[serial(home_settings)]
-    fn app_cycle_noops_when_only_one_app_is_visible() {
-        let temp_home = TempDir::new().expect("create temp home");
-        let _env = TestEnvGuard::isolated(temp_home.path());
-        crate::settings::set_visible_apps(crate::settings::VisibleApps {
-            claude: false,
-            codex: true,
-            gemini: false,
-            opencode: false,
-            hermes: false,
-            openclaw: false,
-            pi: false,
-        })
-        .expect("save visible apps");
-
-        let mut app = App::new(Some(AppType::Codex));
-
-        assert!(matches!(
-            app.on_key(key(KeyCode::Char(']')), &data()),
-            Action::None
-        ));
-        assert!(matches!(
-            app.on_key(key(KeyCode::Char('[')), &data()),
-            Action::None
-        ));
-    }
-
-    #[test]
-    #[serial(home_settings)]
-    fn app_cycle_backwards_skips_hidden_apps_and_wraps() {
-        let temp_home = TempDir::new().expect("create temp home");
-        let _env = TestEnvGuard::isolated(temp_home.path());
-        crate::settings::set_visible_apps(crate::settings::VisibleApps {
-            claude: true,
-            codex: true,
-            gemini: false,
-            opencode: false,
-            hermes: false,
-            openclaw: true,
-            pi: false,
-        })
-        .expect("save visible apps");
-
-        let mut app = App::new(Some(AppType::Claude));
-
-        assert!(matches!(
-            app.on_key(key(KeyCode::Char('[')), &data()),
-            Action::SetAppType(AppType::OpenClaw)
-        ));
-    }
-
-    #[test]
-    #[serial(home_settings)]
-    fn hidden_current_app_wraps_to_first_visible_replacement() {
-        let temp_home = TempDir::new().expect("create temp home");
-        let _env = TestEnvGuard::isolated(temp_home.path());
-        crate::settings::set_visible_apps(crate::settings::VisibleApps {
-            claude: true,
-            codex: true,
-            gemini: false,
-            opencode: false,
-            hermes: false,
-            openclaw: false,
-            pi: false,
-        })
-        .expect("save visible apps");
 
         let mut app = App::new(Some(AppType::OpenClaw));
 
@@ -3117,7 +2939,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "sponsor presets removed from personal fork"]
+    #[ignore = "OpenClaw harness removed from this build: `s` no longer opens the live-config remove confirm for it"]
     fn openclaw_providers_s_key_adds_or_removes_live_config_membership() {
         let mut app = App::new(Some(AppType::OpenClaw));
         app.route = Route::Providers;
@@ -3151,7 +2973,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "sponsor presets removed from personal fork"]
+    #[ignore = "OpenCode harness removed from this build: `s` no longer opens the live-config remove confirm for it"]
     fn opencode_providers_s_key_adds_or_removes_live_config_membership() {
         let mut app = App::new(Some(AppType::OpenCode));
         app.route = Route::Providers;
@@ -3185,7 +3007,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "sponsor presets removed from personal fork"]
     fn hermes_providers_s_key_adds_or_prompts_to_remove_live_config_membership() {
         let mut app = App::new(Some(AppType::Hermes));
         app.route = Route::Providers;
@@ -3417,6 +3238,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "OpenClaw harness removed from this build: `s` no longer opens the live-config remove confirm for it"]
     fn openclaw_providers_s_key_allows_removing_fallback_only_default_provider() {
         let mut app = App::new(Some(AppType::OpenClaw));
         app.route = Route::Providers;
@@ -3447,6 +3269,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "OpenClaw harness removed from this build: `s` no longer blocks removing the default model provider"]
     fn openclaw_providers_s_key_blocks_removing_primary_default_provider() {
         let mut app = App::new(Some(AppType::OpenClaw));
         app.route = Route::Providers;
@@ -3882,7 +3705,7 @@ mod tests {
     }
 
     #[test]
-    fn mcp_apps_picker_can_select_opencode() {
+    fn mcp_apps_picker_cannot_reach_removed_harness_rows() {
         let mut app = App::new(Some(AppType::Claude));
         app.route = Route::Mcp;
         app.focus = Focus::Content;
@@ -3903,23 +3726,37 @@ mod tests {
             .into(),
         });
 
+        // 这个 picker 只渲染 `supported_mcp_apps()`（Claude/Codex/Hermes）。Down 必须
+        // 停在最后一行：行下标和渲染列表一旦脱钩，多按几下就会落到一张不存在的行上，
+        // `Space` 再把已删 harness 勾进 `McpApps`。
         app.on_key(key(KeyCode::Char('m')), &data);
-        app.on_key(key(KeyCode::Down), &data);
-        app.on_key(key(KeyCode::Down), &data);
-        app.on_key(key(KeyCode::Down), &data);
+        for _ in 0..8 {
+            app.on_key(key(KeyCode::Down), &data);
+        }
 
         let action = app.on_key(key(KeyCode::Char(' ')), &data);
         assert!(matches!(action, Action::None));
         assert!(matches!(
             &app.overlay,
-            Overlay::McpAppsPicker { selected, apps, .. } if *selected == 3 && apps.opencode
+            Overlay::McpAppsPicker { selected, apps, .. }
+                if *selected == 2
+                    && !apps.claude
+                    && !apps.codex
+                    && !apps.gemini
+                    && !apps.opencode
+                    && apps.hermes
         ));
 
         let action = app.on_key(key(KeyCode::Enter), &data);
         assert!(matches!(
             action,
             Action::McpSetApps { id, apps }
-                if id == "m1" && !apps.claude && !apps.codex && !apps.gemini && apps.opencode
+                if id == "m1"
+                    && !apps.claude
+                    && !apps.codex
+                    && !apps.gemini
+                    && !apps.opencode
+                    && apps.hermes
         ));
     }
 
@@ -3948,14 +3785,12 @@ mod tests {
         app.on_key(key(KeyCode::Char('m')), &data);
         app.on_key(key(KeyCode::Down), &data);
         app.on_key(key(KeyCode::Down), &data);
-        app.on_key(key(KeyCode::Down), &data);
-        app.on_key(key(KeyCode::Down), &data);
 
         let action = app.on_key(key(KeyCode::Char(' ')), &data);
         assert!(matches!(action, Action::None));
         assert!(matches!(
             &app.overlay,
-            Overlay::McpAppsPicker { selected, apps, .. } if *selected == 4 && apps.hermes
+            Overlay::McpAppsPicker { selected, apps, .. } if *selected == 2 && apps.hermes
         ));
 
         let action = app.on_key(key(KeyCode::Enter), &data);
@@ -3972,8 +3807,8 @@ mod tests {
     }
 
     #[test]
-    fn mcp_apps_picker_from_openclaw_targets_hermes_last_visible_row() {
-        let mut app = App::new(Some(AppType::OpenClaw));
+    fn mcp_apps_picker_from_pi_falls_back_to_first_visible_row() {
+        let mut app = App::new(Some(AppType::Pi));
         app.route = Route::Mcp;
         app.focus = Focus::Content;
 
@@ -3993,11 +3828,14 @@ mod tests {
             .into(),
         });
 
+        // Pi 在 `AppType::all()` 里，但 `supported_mcp_apps()` 不含它——这是"当前 app
+        // 不在渲染列表里"唯一还会真实发生的情形。下标必须回落到列表内，否则第一下
+        // `Space` 就打在不存在的行上。
         let action = app.on_key(key(KeyCode::Char('m')), &data);
         assert!(matches!(action, Action::None));
         assert!(matches!(
             &app.overlay,
-            Overlay::McpAppsPicker { selected, .. } if *selected == 4
+            Overlay::McpAppsPicker { selected, .. } if *selected == 0
         ));
 
         let action = app.on_key(key(KeyCode::Char(' ')), &data);
@@ -4005,12 +3843,7 @@ mod tests {
         assert!(matches!(
             &app.overlay,
             Overlay::McpAppsPicker { selected, apps, .. }
-                if *selected == 4
-                    && !apps.claude
-                    && !apps.codex
-                    && !apps.gemini
-                    && !apps.opencode
-                    && apps.hermes
+                if *selected == 0 && apps.claude
         ));
     }
 
@@ -4794,7 +4627,7 @@ mod tests {
     fn common_snippet_picker_opens_editor_for_non_current_app() {
         let mut app = App::new(Some(AppType::Claude));
         app.overlay = Overlay::CommonSnippetPicker {
-            selected: snippet_picker_index_for_app_type(&AppType::Codex),
+            selected: picker_index_for_app(&snippet_picker_apps(), &AppType::Codex),
         };
 
         let mut data = UiData::default();
@@ -5273,12 +5106,50 @@ mod tests {
         ));
     }
 
+    /// Pi 表单复用 OpenClaw 的字段变体，但编辑器标题不能把已删 harness 的名字
+    /// 露给用户——"OpenClaw 模型列表" 只在真正打开 OpenClaw 表单时出现。
+    #[test]
+    fn provider_add_form_pi_models_editor_title_never_names_a_removed_harness() {
+        let mut app = App::new(Some(AppType::Pi));
+        app.route = Route::Providers;
+        app.focus = Focus::Content;
+
+        let data = UiData::default();
+        app.on_key(key(KeyCode::Char('a')), &data);
+        apply_current_provider_template(&mut app, &data); // apply template -> fields
+
+        if let Some(FormState::ProviderAdd(form)) = app.form.as_mut() {
+            form.focus = super::super::form::FormFocus::Fields;
+            form.clear_text_edit();
+            let fields = form.fields();
+            form.field_idx = fields
+                .iter()
+                .position(|f| *f == ProviderAddField::OpenClawModels)
+                .expect("Pi form reuses the models field");
+        } else {
+            panic!("expected ProviderAdd form");
+        }
+
+        app.on_key(key(KeyCode::Enter), &data);
+
+        let title = app
+            .editor
+            .as_ref()
+            .map(|editor| editor.title.as_str())
+            .expect("Enter should open the models editor");
+        for removed in ["OpenClaw", "OpenCode", "Gemini"] {
+            assert!(
+                !title.contains(removed),
+                "Pi models editor title must not mention {removed}, got: {title}"
+            );
+        }
+    }
+
     #[test]
     fn provider_add_form_openclaw_models_editor_ctrl_s_applies_models_array_back_to_form() {
         let mut app = App::new(Some(AppType::OpenClaw));
         app.route = Route::Providers;
         app.focus = Focus::Content;
-
         let data = UiData::default();
         app.on_key(key(KeyCode::Char('a')), &data);
         apply_current_provider_template(&mut app, &data); // apply template -> fields
@@ -5693,6 +5564,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "OpenClaw harness removed from this build"]
     fn openclaw_nav_env_enter_opens_dedicated_subroute() {
         let mut app = App::new(Some(AppType::OpenClaw));
         app.focus = Focus::Nav;
@@ -5709,6 +5581,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "OpenClaw harness removed from this build"]
     fn openclaw_nav_workspace_enter_opens_dedicated_subroute() {
         let mut app = App::new(Some(AppType::OpenClaw));
         app.focus = Focus::Nav;
@@ -5725,6 +5598,10 @@ mod tests {
     }
 
     #[test]
+    // 与 OpenClaw 无关：nav 被精简成 [Main, Providers, Settings, Exit]，每个 harness
+    // 都一样少，于是 `nav_index(&app, NavItem::Mcp)` 的 expect 直接 panic——Mcp /
+    // Skills / Prompts / Config 这些导航项在 Claude 下也已经不存在了。
+    #[ignore = "nav entries slimmed to Main/Providers/Settings/Exit for every harness, so generic routes are unreachable from the nav bar"]
     fn openclaw_nav_split_keeps_non_openclaw_generic_routes() {
         let cases = [
             (NavItem::Mcp, Route::Mcp),
@@ -5750,6 +5627,10 @@ mod tests {
     }
 
     #[test]
+    // `Route::Config` 仍然存在（route.rs），只是每个 harness 的导航列表都已经被精简成
+    // [Main, Providers, Settings, Exit]，于是 `nav_index(&app, NavItem::Config)` 的
+    // expect 直接 panic——不是路由被删了，是导航项不再出现在导航栏里。
+    #[ignore = "NavItem::Config is not in the 4-item nav list for any harness, so nav_index panics; the Config route itself still exists and stays reachable from the Config action"]
     fn hermes_and_openclaw_nav_config_enter_opens_config_panel() {
         for app_type in [AppType::Hermes, AppType::OpenClaw] {
             let mut app = App::new(Some(app_type));
@@ -6147,6 +6028,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     #[serial(home_settings)]
     fn openclaw_workspace_open_failure_is_localized() {
@@ -6270,6 +6152,7 @@ mod tests {
         assert_eq!(editor.text(), "late content");
     }
 
+    #[cfg(unix)]
     #[test]
     #[serial(home_settings)]
     fn openclaw_daily_memory_save_failure_is_localized() {
@@ -6465,6 +6348,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "OpenClaw harness removed from this build"]
     fn openclaw_nav_tools_enter_opens_dedicated_subroute() {
         let mut app = App::new(Some(AppType::OpenClaw));
         app.focus = Focus::Nav;
@@ -6481,6 +6365,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "OpenClaw harness removed from this build"]
     fn openclaw_nav_agents_enter_opens_dedicated_subroute() {
         let mut app = App::new(Some(AppType::OpenClaw));
         app.focus = Focus::Nav;
@@ -10345,26 +10230,6 @@ mod tests {
     }
 
     #[test]
-    fn settings_menu_exposes_visible_apps_item() {
-        assert!(
-            SettingsItem::ALL
-                .iter()
-                .any(|item| matches!(item, SettingsItem::VisibleApps)),
-            "Settings should expose a visible apps entry"
-        );
-    }
-
-    #[test]
-    fn settings_menu_exposes_openclaw_config_dir_item() {
-        assert!(
-            SettingsItem::ALL
-                .iter()
-                .any(|item| matches!(item, SettingsItem::OpenClawConfigDir)),
-            "Settings should expose an OpenClaw config directory entry"
-        );
-    }
-
-    #[test]
     fn settings_menu_exposes_managed_accounts_item() {
         assert!(
             matches!(
@@ -10794,35 +10659,6 @@ mod tests {
     }
 
     #[test]
-    #[serial(home_settings)]
-    fn settings_openclaw_config_dir_item_opens_text_input() {
-        let temp_home = TempDir::new().expect("create temp home");
-        let _env = TestEnvGuard::isolated(temp_home.path());
-        let mut settings = crate::settings::get_settings();
-        settings.openclaw_config_dir = Some(r"\\wsl$\Ubuntu\home\demo\.openclaw".to_string());
-        crate::settings::update_settings(settings).expect("save openclaw override");
-
-        let mut app = App::new(Some(AppType::Claude));
-        app.route = Route::Settings;
-        app.focus = Focus::Content;
-        app.settings_idx = SettingsItem::ALL
-            .iter()
-            .position(|item| matches!(item, SettingsItem::OpenClawConfigDir))
-            .expect("OpenClawConfigDir missing from SettingsItem::ALL");
-
-        let action = app.on_key(key(KeyCode::Enter), &UiData::default());
-        assert!(matches!(action, Action::None));
-        assert!(matches!(
-            app.overlay,
-            Overlay::TextInput(TextInputState {
-                submit: TextSubmit::SettingsOpenClawConfigDir,
-                input,
-                ..
-            }) if input.value == r"\\wsl$\Ubuntu\home\demo\.openclaw"
-        ));
-    }
-
-    #[test]
     fn settings_icons_row_toggles_and_persists_mode() {
         let temp_home = TempDir::new().expect("create temp home");
         let _env = TestEnvGuard::isolated(temp_home.path());
@@ -10854,44 +10690,11 @@ mod tests {
     }
 
     #[test]
-    fn settings_openclaw_config_dir_text_submit_emits_action() {
-        let mut app = App::new(Some(AppType::Claude));
-        app.route = Route::Settings;
-        app.focus = Focus::Content;
-
-        app.overlay = Overlay::TextInput(TextInputState {
-            title: "OpenClaw Config Directory".to_string(),
-            prompt: "path".to_string(),
-            input: TextInput::new(r"\\wsl$\Ubuntu\home\demo\.openclaw".to_string()),
-            submit: TextSubmit::SettingsOpenClawConfigDir,
-        });
-
-        let action = app.on_key(key(KeyCode::Enter), &UiData::default());
-        assert!(matches!(
-            action,
-            Action::SetOpenClawConfigDir { path: Some(path) }
-                if path == r"\\wsl$\Ubuntu\home\demo\.openclaw"
-        ));
-
-        app.overlay = Overlay::TextInput(TextInputState {
-            title: "OpenClaw Config Directory".to_string(),
-            prompt: "path".to_string(),
-            input: TextInput::new("   ".to_string()),
-            submit: TextSubmit::SettingsOpenClawConfigDir,
-        });
-
-        let action = app.on_key(key(KeyCode::Enter), &UiData::default());
-        assert!(matches!(
-            action,
-            Action::SetOpenClawConfigDir { path: None }
-        ));
-    }
-
-    #[test]
     #[serial(home_settings)]
     fn settings_codex_unified_session_history_enable_defaults_to_no_migration() {
         let temp_home = TempDir::new().expect("create temp home");
         let _env = TestEnvGuard::isolated(temp_home.path());
+        crate::test_support::disable_unified_codex_session_history();
 
         let mut app = App::new(Some(AppType::Codex));
         app.route = Route::Settings;
@@ -10928,6 +10731,7 @@ mod tests {
     fn settings_codex_unified_session_history_enable_y_requests_migration() {
         let temp_home = TempDir::new().expect("create temp home");
         let _env = TestEnvGuard::isolated(temp_home.path());
+        crate::test_support::disable_unified_codex_session_history();
         let mut app = App::new(Some(AppType::Codex));
         app.route = Route::Settings;
         app.focus = Focus::Content;
@@ -10955,6 +10759,7 @@ mod tests {
     fn settings_codex_unified_session_history_cancel_does_not_change_settings() {
         let temp_home = TempDir::new().expect("create temp home");
         let _env = TestEnvGuard::isolated(temp_home.path());
+        crate::test_support::disable_unified_codex_session_history();
         let mut app = App::new(Some(AppType::Codex));
         app.route = Route::Settings;
         app.focus = Focus::Content;
@@ -11075,360 +10880,6 @@ mod tests {
             Action::SetPreserveCodexOfficialAuth { enabled: false }
         ));
         assert!(matches!(app.overlay, Overlay::None));
-    }
-
-    #[test]
-    #[serial(home_settings)]
-    fn settings_visible_apps_item_opens_picker_overlay() {
-        let temp_home = TempDir::new().expect("create temp home");
-        let _env = TestEnvGuard::isolated(temp_home.path());
-        let expected = crate::settings::get_visible_apps();
-
-        let mut app = App::new(Some(AppType::Claude));
-        app.route = Route::Settings;
-        app.focus = Focus::Content;
-        app.settings_idx = SettingsItem::ALL
-            .iter()
-            .position(|item| matches!(item, SettingsItem::VisibleApps))
-            .expect("VisibleApps missing from SettingsItem::ALL");
-
-        let action = app.on_key(key(KeyCode::Enter), &UiData::default());
-        assert!(matches!(action, Action::None));
-        assert!(matches!(
-            &app.overlay,
-            Overlay::VisibleAppsPicker { selected, apps }
-                if *selected == app_type_picker_index(&app.app_type) && apps == &expected
-        ));
-    }
-
-    #[test]
-    #[serial(home_settings)]
-    fn settings_skills_storage_location_opens_picker_and_confirms_migration() {
-        let temp_home = TempDir::new().expect("create temp home");
-        let _env = TestEnvGuard::isolated(temp_home.path());
-
-        let mut app = App::new(Some(AppType::Claude));
-        app.route = Route::Settings;
-        app.focus = Focus::Content;
-        app.settings_idx = SettingsItem::ALL
-            .iter()
-            .position(|item| matches!(item, SettingsItem::SkillsStorageLocation))
-            .expect("SkillsStorageLocation missing from SettingsItem::ALL");
-
-        assert!(matches!(
-            app.on_key(key(KeyCode::Enter), &UiData::default()),
-            Action::None
-        ));
-        assert!(matches!(
-            app.overlay,
-            Overlay::SkillsStorageLocationPicker { selected: 0 }
-        ));
-
-        assert!(matches!(
-            app.on_key(key(KeyCode::Enter), &UiData::default()),
-            Action::SkillsSetStorageLocation {
-                location: SkillStorageLocation::CcSwitch
-            }
-        ));
-        assert!(matches!(app.overlay, Overlay::None));
-
-        app.overlay = Overlay::SkillsStorageLocationPicker { selected: 1 };
-        let mut data = UiData::default();
-        data.skills
-            .installed
-            .push(installed_skill("managed", "Managed"));
-        assert!(matches!(
-            app.on_key(key(KeyCode::Enter), &data),
-            Action::None
-        ));
-        assert!(matches!(
-            app.overlay,
-            Overlay::Confirm(ConfirmOverlay {
-                action: ConfirmAction::SkillsMigrateStorage {
-                    location: SkillStorageLocation::Unified
-                },
-                ..
-            })
-        ));
-    }
-
-    #[test]
-    #[serial(home_settings)]
-    fn settings_skills_sync_method_uses_the_upstream_two_choice_picker() {
-        let temp_home = TempDir::new().expect("create temp home");
-        let _env = TestEnvGuard::isolated(temp_home.path());
-
-        let mut app = App::new(Some(AppType::Claude));
-        app.route = Route::Settings;
-        app.focus = Focus::Content;
-        app.settings_idx = SettingsItem::ALL
-            .iter()
-            .position(|item| matches!(item, SettingsItem::SkillsSyncMethod))
-            .expect("SkillsSyncMethod missing from SettingsItem::ALL");
-
-        let mut data = UiData::default();
-        data.skills.sync_method = crate::services::skill::SyncMethod::Auto;
-
-        {
-            let _lang = use_test_language(Language::Chinese);
-            let help = crate::cli::tui::help::context_help_for_app(&app, &data);
-            let body = help.lines.join("\n");
-            assert_eq!(help.title, "Skills 同步方式");
-            assert!(body.contains("选择 Skills 的文件同步策略"), "{body}");
-            assert!(body.contains("软连接节省磁盘空间并支持实时同步"), "{body}");
-        }
-
-        assert!(matches!(
-            app.on_key(key(KeyCode::Enter), &data),
-            Action::None
-        ));
-        assert!(matches!(
-            app.overlay,
-            Overlay::SkillsSyncMethodPicker { selected: 0 }
-        ));
-
-        assert!(matches!(
-            app.on_key(key(KeyCode::Enter), &data),
-            Action::SkillsSetSyncMethod {
-                method: crate::services::skill::SyncMethod::Symlink
-            }
-        ));
-        assert!(matches!(app.overlay, Overlay::None));
-
-        data.skills.sync_method = crate::services::skill::SyncMethod::Symlink;
-        app.overlay = Overlay::SkillsSyncMethodPicker { selected: 0 };
-        assert!(matches!(
-            app.on_key(key(KeyCode::Down), &data),
-            Action::None
-        ));
-        assert!(matches!(
-            app.on_key(key(KeyCode::Down), &data),
-            Action::None
-        ));
-        assert!(matches!(
-            app.overlay,
-            Overlay::SkillsSyncMethodPicker { selected: 1 }
-        ));
-        assert!(matches!(
-            app.on_key(key(KeyCode::Enter), &data),
-            Action::SkillsSetSyncMethod {
-                method: crate::services::skill::SyncMethod::Copy
-            }
-        ));
-    }
-
-    #[test]
-    #[serial(home_settings)]
-    fn visible_apps_picker_rejects_zero_selection_without_closing() {
-        let temp_home = TempDir::new().expect("create temp home");
-        let _env = TestEnvGuard::isolated(temp_home.path());
-        crate::settings::set_visible_apps(crate::settings::VisibleApps {
-            claude: true,
-            codex: false,
-            gemini: false,
-            opencode: false,
-            hermes: false,
-            openclaw: false,
-            pi: false,
-        })
-        .expect("save visible apps");
-        crate::settings::set_visible_apps_mode(crate::settings::VisibleAppsMode::Manual)
-            .expect("save visible apps mode");
-
-        let mut app = App::new(Some(AppType::Claude));
-        app.route = Route::Settings;
-        app.focus = Focus::Content;
-        app.overlay = Overlay::VisibleAppsPicker {
-            selected: 0,
-            apps: crate::settings::get_visible_apps(),
-        };
-
-        let data = UiData::default();
-        let toggle_action = app.on_key(key(KeyCode::Char(' ')), &data);
-        assert!(matches!(toggle_action, Action::None));
-
-        let action = app.on_key(key(KeyCode::Enter), &data);
-        assert!(matches!(action, Action::None));
-        assert!(matches!(
-            &app.overlay,
-            Overlay::VisibleAppsPicker { apps, .. }
-                if !apps.claude
-                    && !apps.codex
-                    && !apps.gemini
-                    && !apps.opencode
-                    && !apps.openclaw
-        ));
-        assert!(matches!(
-            app.toast.as_ref(),
-            Some(Toast {
-                message,
-                kind: ToastKind::Warning,
-                ..
-            }) if message == texts::tui_toast_visible_apps_zero_selection_warning()
-        ));
-    }
-
-    #[test]
-    #[serial(home_settings)]
-    fn visible_apps_picker_x_key_does_not_toggle_selection() {
-        let temp_home = TempDir::new().expect("create temp home");
-        let _env = TestEnvGuard::isolated(temp_home.path());
-        crate::settings::set_visible_apps(crate::settings::VisibleApps {
-            claude: true,
-            codex: false,
-            gemini: false,
-            opencode: false,
-            hermes: false,
-            openclaw: false,
-            pi: false,
-        })
-        .expect("save visible apps");
-
-        let mut app = App::new(Some(AppType::Claude));
-        app.route = Route::Settings;
-        app.focus = Focus::Content;
-        app.overlay = Overlay::VisibleAppsPicker {
-            selected: 0,
-            apps: crate::settings::get_visible_apps(),
-        };
-
-        let action = app.on_key(key(KeyCode::Char('x')), &UiData::default());
-        assert!(matches!(action, Action::None));
-        assert!(matches!(
-            &app.overlay,
-            Overlay::VisibleAppsPicker { apps, .. }
-                if apps.claude
-                    && !apps.codex
-                    && !apps.gemini
-                    && !apps.opencode
-                    && !apps.openclaw
-        ));
-    }
-
-    #[test]
-    #[serial(home_settings)]
-    fn visible_apps_picker_prompts_manual_switch_for_controlled_app_in_auto_mode() {
-        let temp_home = TempDir::new().expect("create temp home");
-        let _env = TestEnvGuard::isolated(temp_home.path());
-        let mut settings = crate::settings::get_settings();
-        settings.visible_apps = crate::settings::VisibleApps {
-            claude: true,
-            codex: true,
-            gemini: true,
-            opencode: false,
-            hermes: false,
-            openclaw: false,
-            pi: false,
-        };
-        settings.visible_apps_settings.mode = crate::settings::VisibleAppsMode::Auto;
-        settings.visible_apps_settings.auto_prompt_decided = true;
-        crate::settings::update_settings(settings).expect("save settings");
-
-        let mut app = App::new(Some(AppType::Claude));
-        app.route = Route::Settings;
-        app.focus = Focus::Content;
-        app.overlay = Overlay::VisibleAppsPicker {
-            selected: app_type_picker_index(&AppType::Gemini),
-            apps: crate::settings::get_visible_apps(),
-        };
-
-        let action = app.on_key(key(KeyCode::Char(' ')), &UiData::default());
-        assert!(matches!(action, Action::None));
-        assert!(matches!(
-            &app.overlay,
-            Overlay::Confirm(ConfirmOverlay {
-                action: ConfirmAction::VisibleAppsSwitchToManual { apps, selected },
-                ..
-            }) if !apps.gemini && *selected == app_type_picker_index(&AppType::Gemini)
-        ));
-        assert!(app.toast.is_none());
-    }
-
-    #[test]
-    #[serial(home_settings)]
-    fn visible_apps_picker_prompts_manual_switch_for_claude_codex_in_auto_mode() {
-        let temp_home = TempDir::new().expect("create temp home");
-        let _env = TestEnvGuard::isolated(temp_home.path());
-        let mut settings = crate::settings::get_settings();
-        settings.visible_apps = crate::settings::VisibleApps {
-            claude: true,
-            codex: true,
-            gemini: false,
-            opencode: false,
-            hermes: false,
-            openclaw: false,
-            pi: false,
-        };
-        settings.visible_apps_settings.mode = crate::settings::VisibleAppsMode::Auto;
-        settings.visible_apps_settings.auto_prompt_decided = true;
-        crate::settings::update_settings(settings).expect("save settings");
-
-        let mut app = App::new(Some(AppType::Claude));
-        app.route = Route::Settings;
-        app.focus = Focus::Content;
-        app.overlay = Overlay::VisibleAppsPicker {
-            selected: app_type_picker_index(&AppType::Codex),
-            apps: crate::settings::get_visible_apps(),
-        };
-
-        let action = app.on_key(key(KeyCode::Char(' ')), &UiData::default());
-        assert!(matches!(action, Action::None));
-        assert!(matches!(
-            &app.overlay,
-            Overlay::Confirm(ConfirmOverlay {
-                action: ConfirmAction::VisibleAppsSwitchToManual { apps, selected },
-                ..
-            }) if !apps.codex && *selected == app_type_picker_index(&AppType::Codex)
-        ));
-        assert!(app.toast.is_none());
-    }
-
-    #[test]
-    #[serial(home_settings)]
-    fn visible_apps_manual_switch_prompt_cancel_returns_to_picker_without_change() {
-        let temp_home = TempDir::new().expect("create temp home");
-        let _env = TestEnvGuard::isolated(temp_home.path());
-        let initial = crate::settings::VisibleApps {
-            claude: true,
-            codex: true,
-            gemini: false,
-            opencode: false,
-            hermes: false,
-            openclaw: false,
-            pi: false,
-        };
-        let mut settings = crate::settings::get_settings();
-        settings.visible_apps = initial.clone();
-        settings.visible_apps_settings.mode = crate::settings::VisibleAppsMode::Auto;
-        settings.visible_apps_settings.auto_prompt_decided = true;
-        crate::settings::update_settings(settings).expect("save settings");
-
-        let mut next = initial.clone();
-        next.codex = false;
-
-        let mut app = App::new(Some(AppType::Claude));
-        app.overlay = Overlay::Confirm(ConfirmOverlay {
-            title: texts::tui_visible_apps_manual_switch_prompt_title().to_string(),
-            message: texts::tui_visible_apps_manual_switch_prompt_message().to_string(),
-            action: ConfirmAction::VisibleAppsSwitchToManual {
-                apps: next,
-                selected: app_type_picker_index(&AppType::Codex),
-            },
-        });
-
-        let action = app.on_key(key(KeyCode::Esc), &UiData::default());
-
-        assert!(matches!(action, Action::None));
-        assert!(matches!(
-            &app.overlay,
-            Overlay::VisibleAppsPicker { selected, apps }
-                if *selected == app_type_picker_index(&AppType::Codex) && apps == &initial
-        ));
-        assert_eq!(crate::settings::get_visible_apps(), initial);
-        assert_eq!(
-            crate::settings::get_visible_apps_settings().mode,
-            crate::settings::VisibleAppsMode::Auto
-        );
     }
 
     #[test]
@@ -13156,6 +12607,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "sponsor presets removed from personal fork"]
     fn provider_template_picker_down_skips_section_headers() {
         let mut app = App::new(Some(AppType::Claude));
         app.form = Some(FormState::ProviderAdd(ProviderAddFormState::new(
@@ -13247,6 +12699,7 @@ mod tests {
     /// the Sponsors header. Navigation must follow display order, so a naive
     /// flat-index ±1 stepping implementation cannot pass this.
     #[test]
+    #[ignore = "sponsor presets removed from personal fork"]
     fn provider_template_picker_navigates_codex_in_display_order() {
         let mut app = App::new(Some(AppType::Codex));
         let form = ProviderAddFormState::new(AppType::Codex);
@@ -15771,7 +15224,7 @@ mod tests {
 
     #[test]
     fn failover_queue_manager_f_toggles_auto_failover_when_empty() {
-        let mut app = App::new(Some(AppType::Gemini));
+        let mut app = App::new(Some(AppType::Claude));
         app.overlay = Overlay::FailoverQueueManager {
             selected_provider_id: None,
         };
@@ -20833,7 +20286,10 @@ mod tests {
         assert!(matches!(action, Action::SwitchRoute(Route::Pricing)));
         assert!(matches!(app.route, Route::Pricing));
         assert_eq!(app.route_stack, vec![Route::Usage]);
-        assert!(matches!(app.nav_item(), NavItem::Usage));
+        // 这里以前还断言 `app.nav_item()` 是 `NavItem::Usage`。nav 精简成
+        // [Main, Providers, Settings, Exit] 之后 Usage 不再是导航项，
+        // `nav_item()` 只会回落到 Main；Pricing 作为 Usage 子路由的进出仍然有效，
+        // 所以只保留这条能真正表达的断言。
 
         let action = app.on_key(key(KeyCode::Esc), &data);
 

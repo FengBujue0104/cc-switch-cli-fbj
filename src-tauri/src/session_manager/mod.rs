@@ -15,9 +15,12 @@ pub(crate) mod transcript;
 use serde::{Deserialize, Serialize};
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 use providers::{claude, codex, gemini, hermes, openclaw, opencode, pi};
 use scan_cache_store::ScanCacheStore;
+
+use crate::AppType;
 
 /// Session metadata as rendered on the Sessions page.
 ///
@@ -209,9 +212,13 @@ pub(crate) fn sort_by_recent(sessions: &mut [SessionMeta]) {
 /// Providers in the stable order used by the "all providers" manifest stream.
 /// SQLite-only sources (opencode.db / hermes state.db) are queried inside their
 /// provider module and are intentionally not covered by the file cache.
-pub(crate) const CACHED_PROVIDERS: [&str; 7] = [
-    "codex", "claude", "opencode", "openclaw", "gemini", "hermes", "pi",
-];
+///
+/// 只列本构建保留的 harness。已删的 OpenCode/OpenClaw/Gemini 变体仍留在枚举里
+/// 以便解析旧数据，但它们不能被"all providers"范围扫到：那会让已删 harness 的
+/// 会话重新出现在统一历史里，同时也会再去读它们的 live 目录。按 scope 直接查旧
+/// provider 的分派分支（`stream_sessions_for_provider_cancellable` 等）保留，
+/// 由旧数据/旧调用方使用。
+pub(crate) const CACHED_PROVIDERS: [&str; 4] = ["codex", "claude", "hermes", "pi"];
 
 /// Legacy snapshot row cap (one historical 100-row page plus look-ahead).
 /// Current manifests page independently; the value also bounds compatibility
@@ -510,6 +517,14 @@ pub fn delete_session(
     session_id: &str,
     source_path: &str,
 ) -> Result<bool, String> {
+    // 已删 harness 一律不再写：旧数据里可能还留着 opencode/openclaw/gemini 行，
+    // 但删除会话会动它们的 live 目录/数据库，所以这里直接拒掉（读取侧仍保留，
+    // 见 CACHED_PROVIDERS 上的说明）。
+    if let Ok(app_type) = AppType::from_str(provider_id) {
+        if !AppType::all().any(|kept| kept == app_type) {
+            return Err(format!("Unsupported provider: {provider_id}"));
+        }
+    }
     // SQLite sessions bypass the file-based deletion path
     if provider_id == "opencode" && source_path.starts_with("sqlite:") {
         return opencode::delete_session_sqlite(session_id, source_path);
@@ -735,5 +750,43 @@ mod tests {
             .expect_err("expected missing source path to fail");
 
         assert!(err.contains("session source not found"));
+    }
+
+    #[test]
+    fn delete_session_refuses_removed_harnesses_for_every_source_kind() {
+        // 旧数据里可能还留着 gemini/opencode/openclaw 的会话行；删除会动它们的
+        // live 目录或 SQLite 文件，所以不管 source_path 是文件还是 sqlite: 都要拒掉。
+        let root = tempdir().expect("tempdir");
+        let source = root.path().join("session.jsonl");
+        std::fs::write(&source, "{}").expect("write source");
+
+        for removed in ["gemini", "opencode", "openclaw"] {
+            for source_path in [
+                source.to_string_lossy().to_string(),
+                format!("sqlite:{removed}"),
+            ] {
+                let err = delete_session(removed, "session-1", &source_path)
+                    .expect_err("expected removed harness to be rejected");
+                assert_eq!(err, format!("Unsupported provider: {removed}"));
+            }
+        }
+    }
+
+    #[test]
+    fn delete_session_still_resolves_kept_harness_provider_roots() {
+        // 保留的 harness 不能被这个守卫拦住：provider_root 找不到目录时报的是
+        // 另一条错误，说明守卫已经放行。
+        let root = tempdir().expect("tempdir");
+        let source = root.path().join("session.jsonl");
+        std::fs::write(&source, "{}").expect("write source");
+
+        for kept in AppType::all() {
+            let err = delete_session(kept.as_str(), "session-1", &source.to_string_lossy())
+                .expect_err("expected a missing provider root outside the sandbox");
+            assert!(
+                !err.contains("Unsupported provider"),
+                "{kept:?} should pass the removed-harness guard, got: {err}"
+            );
+        }
     }
 }

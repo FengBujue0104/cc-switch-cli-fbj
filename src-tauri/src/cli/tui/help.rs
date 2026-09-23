@@ -54,8 +54,6 @@ enum HelpTarget {
     PiPromptTemplates,
     FailoverQueue,
     PreferredEditor,
-    SkillStorageLocation,
-    SkillSyncMethod,
     GlobalOutboundProxy,
     CodexOfficialAuthPreservation,
     CodexUnifiedSessionHistory,
@@ -122,8 +120,6 @@ fn current_help_target(app: &App) -> HelpTarget {
                 provider_local_proxy_overlay_target(app, LocalProxySettingsField::UserAgent)
             }
             Overlay::ExternalEditorPicker { .. } => HelpTarget::PreferredEditor,
-            Overlay::SkillsSyncMethodPicker { .. } => HelpTarget::SkillSyncMethod,
-            Overlay::SkillsStorageLocationPicker { .. } => HelpTarget::SkillStorageLocation,
             Overlay::ClaudeModelPicker { .. } => {
                 provider_field_overlay_target(app, ProviderAddField::ClaudeModelConfig)
             }
@@ -172,8 +168,6 @@ fn current_help_target(app: &App) -> HelpTarget {
     if matches!(app.route, super::route::Route::Settings) && matches!(app.focus, Focus::Content) {
         match SettingsItem::ALL.get(app.settings_idx) {
             Some(SettingsItem::PreferredEditor) => return HelpTarget::PreferredEditor,
-            Some(SettingsItem::SkillsStorageLocation) => return HelpTarget::SkillStorageLocation,
-            Some(SettingsItem::SkillsSyncMethod) => return HelpTarget::SkillSyncMethod,
             Some(SettingsItem::OutboundProxy) => return HelpTarget::GlobalOutboundProxy,
             Some(SettingsItem::PreserveCodexOfficialAuth) => {
                 return HelpTarget::CodexOfficialAuthPreservation;
@@ -343,8 +337,8 @@ fn help_for_target(target: HelpTarget, app: &App, data: &UiData) -> HelpContent 
         HelpTarget::Sessions => HelpContent::new(
             texts::tui_sessions_title(),
             help_lines(
-                "会话始终只显示当前应用，结果由项目范围 × / 搜索共同决定。\n←/→ 切换列表和详情，h/l 是备用键；↑/↓ 逐项移动，PgUp/PgDn 按页移动。p 打开项目选择器；Home/End 在当前会话列表或消息历史中跳到首尾，Shift+←/→ 查看完整目录，Shift+Home/End 直达目录两端。\n详情中的消息按需分页，覆盖完整逻辑历史；为保持响应速度，超长单条正文只显示有界预览。详情内的 / 只过滤当前消息页，保留筛选时仍可用 PgUp/PgDn/Home/End 浏览其他历史页。\nClaude、Codex、Gemini 和 OpenCode 的费用与 token 来自当前仍保留在 proxy_request_logs 中、经有效过滤去重后能以确定性 ID 归属到该会话的本地 usage 记录；Hermes 使用其 state.db 提供的估算。Cost 是根据这些本地可用记录和模型定价得出的尽力估算，不是账单，也不代表历史上曾发生的全部费用。“-”表示没有可归属的 usage、身份有歧义、查询不可用，或存在无法可靠计价的 token 行。Codex 根会话费用不含独立 subagent 线程的费用。\n日志被删除或归档、数据源写入失败、malformed 行、无法归属的代理 Generated ID、尚未触发重查的实时日志及浮点求和误差，都可能让估算与实际费用不同。\n“未知目录”位于项目列表末尾，只包含缺少项目目录的旧会话；精确项目按词法规范化后的完整目录匹配。",
-                "Sessions always show the current app; results combine Project scope × / Search.\nUse ←/→ to switch between the list and details; h/l are aliases. Use ↑/↓ to move one item and PgUp/PgDn to move by a page. Press p to choose a project; Home/End jumps to either end of the active session list or message history, Shift+←/→ reveals the complete directory, and Shift+Home/End jumps to either path end.\nDetail messages are paged on demand across the complete logical history. To stay responsive, an unusually long individual body is shown as a bounded preview. In details, / filters the current message page only; PgUp/PgDn/Home/End still browse other history pages while the filter is retained.\nFor Claude, Codex, Gemini, and OpenCode, Cost and tokens come from locally available usage rows that remain in proxy_request_logs after effective deduplication and can be deterministically attributed to this session. Hermes uses estimates supplied by its state.db. Cost is a best-effort estimate based on these local records and model pricing; it is not a bill and does not represent every historical charge. \"-\" means there is no attributable usage, the identity is ambiguous, the query is unavailable, or at least one token-bearing row cannot be priced reliably. A Codex root session excludes costs from independent subagent threads.\nDeleted or archived logs, source write failures, malformed rows, unattributable proxy Generated IDs, live rows awaiting a requery, and floating-point summation can all make the estimate differ from actual charges.\nUnknown directory is last and contains only legacy sessions without a project directory; exact projects match the complete lexically normalized directory.",
+                "会话始终只显示当前应用，结果由项目范围 × / 搜索共同决定。\n←/→ 切换列表和详情，h/l 是备用键；↑/↓ 逐项移动，PgUp/PgDn 按页移动。p 打开项目选择器；Home/End 在当前会话列表或消息历史中跳到首尾，Shift+←/→ 查看完整目录，Shift+Home/End 直达目录两端。\n详情中的消息按需分页，覆盖完整逻辑历史；为保持响应速度，超长单条正文只显示有界预览。详情内的 / 只过滤当前消息页，保留筛选时仍可用 PgUp/PgDn/Home/End 浏览其他历史页。\nClaude、Codex 和 Pi 的费用与 token 来自当前仍保留在 proxy_request_logs 中、经有效过滤去重后能以确定性 ID 归属到该会话的本地 usage 记录；Hermes 使用其 state.db 提供的估算。Cost 是根据这些本地可用记录和模型定价得出的尽力估算，不是账单，也不代表历史上曾发生的全部费用。“-”表示没有可归属的 usage、身份有歧义、查询不可用，或存在无法可靠计价的 token 行。Codex 根会话费用不含独立 subagent 线程的费用。\n日志被删除或归档、数据源写入失败、malformed 行、无法归属的代理 Generated ID、尚未触发重查的实时日志及浮点求和误差，都可能让估算与实际费用不同。\n“未知目录”位于项目列表末尾，只包含缺少项目目录的旧会话；精确项目按词法规范化后的完整目录匹配。",
+                "Sessions always show the current app; results combine Project scope × / Search.\nUse ←/→ to switch between the list and details; h/l are aliases. Use ↑/↓ to move one item and PgUp/PgDn to move by a page. Press p to choose a project; Home/End jumps to either end of the active session list or message history, Shift+←/→ reveals the complete directory, and Shift+Home/End jumps to either path end.\nDetail messages are paged on demand across the complete logical history. To stay responsive, an unusually long individual body is shown as a bounded preview. In details, / filters the current message page only; PgUp/PgDn/Home/End still browse other history pages while the filter is retained.\nFor Claude, Codex, and Pi, Cost and tokens come from locally available usage rows that remain in proxy_request_logs after effective deduplication and can be deterministically attributed to this session. Hermes uses estimates supplied by its state.db. Cost is a best-effort estimate based on these local records and model pricing; it is not a bill and does not represent every historical charge. \"-\" means there is no attributable usage, the identity is ambiguous, the query is unavailable, or at least one token-bearing row cannot be priced reliably. A Codex root session excludes costs from independent subagent threads.\nDeleted or archived logs, source write failures, malformed rows, unattributable proxy Generated IDs, live rows awaiting a requery, and floating-point summation can all make the estimate differ from actual charges.\nUnknown directory is last and contains only legacy sessions without a project directory; exact projects match the complete lexically normalized directory.",
             ),
         ),
         HelpTarget::PiSystemPrompts => HelpContent::new(
@@ -373,20 +367,6 @@ fn help_for_target(target: HelpTarget, app: &App, data: &UiData) -> HelpContent 
             help_lines(
                 "打开设置项时，cc-switch 才会检测当前系统中可执行的常见编辑器；检测不会启动任何程序，也不影响启动速度。检测结果只作为候选，必须按 Enter 明确选择后才会保存，不会自动替你选择。有效的 VISUAL 和 EDITOR 命令也会出现在候选中。\n自定义命令会按参数直接执行，不经过 shell，临时文件路径会追加为最后一个参数。带空格的路径或参数需要加引号；自定义输入留空可清除当前选择。\n图形编辑器必须使用等待参数（例如 code --wait），否则进程提前退出后临时文件会被回收。已配置的命令如果启动失败会直接报错，不会静默换用其他编辑器。",
                 "cc-switch detects executable common editors only when you open this setting; detection launches nothing and does not affect startup time. Results are choices only: nothing is saved until you explicitly press Enter, and no editor is selected automatically. Valid VISUAL and EDITOR commands also appear in the list.\nCustom commands are executed directly without a shell, with the temporary file path appended as the final argument. Quote paths or arguments that contain spaces; leave custom input empty to clear the selection.\nGUI editors need a wait flag, such as code --wait, or the temporary file could be removed when the launcher exits early. A configured command reports launch failures instead of silently switching editors.",
-            ),
-        ),
-        HelpTarget::SkillStorageLocation => HelpContent::new(
-            texts::tui_settings_skills_storage_location_label(),
-            help_lines(
-                "选择 CC Switch 管理目录或通用的 ~/.agents/skills 目录作为已管理技能的唯一主存储。切换时只迁移数据库中记录的技能，并刷新已启用应用的链接或副本；不会导入、认领或移动未管理目录。Unified 中存在未管理目录时，云同步会拒绝替换整个目录，请先显式导入或切回 CC Switch 存储。\n如果目标位置已有同名目录（即使内容相同），迁移也会停止并保留当前设置；只有带有本次迁移凭据的中断副本可以自动续跑。应用刷新失败时会保留旧副本；再次选择当前存储位置可重试修复。迁移期间请勿同时运行其他技能安装或更新命令。",
-                "Choose either CC Switch's managed directory or the shared ~/.agents/skills directory as the single source of truth for managed Skills. Switching moves only Skills recorded in the database and refreshes links or copies for enabled apps; unmanaged directories are not imported, claimed, or moved. If Unified contains unmanaged directories, cloud sync refuses to replace the root; import them explicitly or switch back to CC Switch storage first.\nMigration stops and keeps the current setting when the target already has a same-named directory, even with identical content; only an interrupted copy carrying this migration's receipt can resume automatically. If app refresh is partial, the old copy is retained; select the current location again to retry reconciliation. Do not run another Skill install or update command while migration is active.",
-            ),
-        ),
-        HelpTarget::SkillSyncMethod => HelpContent::new(
-            texts::tui_settings_skills_sync_method_label(),
-            help_lines(
-                "选择 Skills 的文件同步策略。软连接节省磁盘空间并支持实时同步；文件复制适用于不支持软连接的环境。Windows 使用软连接时可能需要管理员权限或开启开发者模式。\n此设置只影响之后的 Skills 部署或同步，不会迁移主存储位置，也不会立即重建现有应用目录。如需立即应用，请在 Skills 页面执行同步。",
-                "Choose how to sync Skills files. Symlinks save disk space and enable real-time sync; copying files supports environments where symlinks are unavailable. On Windows, symlinks may require administrator privileges or Developer Mode.\nThis setting affects future Skill deployments or syncs only. It does not move the managed storage location or immediately rebuild existing app directories. Run Sync from the Skills page to apply it now.",
             ),
         ),
         HelpTarget::GlobalOutboundProxy => HelpContent::new(
@@ -875,8 +855,10 @@ fn provider_field_help(app_type: AppType, field: ProviderAddField) -> HelpConten
         ProviderAddField::OpenClawApiProtocol => HelpContent::new(
             texts::tui_label_openclaw_api(),
             help_lines(
-                "选择 OpenClaw 使用的协议适配器。不同适配器会影响请求格式。",
-                "Selects the protocol adapter used by OpenClaw. Different adapters affect request shape.",
+                // 这个字段由 Pi 表单复用（OpenClaw 本体已不再是可达的 harness），
+                // 所以文案里不能点名任何单个 harness——见 form/provider_state.rs。
+                "选择请求使用的协议适配器。不同适配器会影响请求格式。",
+                "Selects the protocol adapter used for requests. Different adapters affect request shape.",
             ),
         ),
         ProviderAddField::OpenCodeNpmPackage => HelpContent::new(
@@ -896,8 +878,9 @@ fn provider_field_help(app_type: AppType, field: ProviderAddField) -> HelpConten
         ProviderAddField::OpenClawModels => HelpContent::new(
             texts::tui_label_openclaw_models(),
             help_lines(
-                "编辑 OpenClaw/Pi 模型列表。Pi 表单中可按 f 从原生端点拉取模型。",
-                "Edits OpenClaw/Pi model entries. In a Pi form, press f to fetch from the native endpoint.",
+                // 同样由 Pi 表单复用：只说明当前表单的动作，不点名 harness。
+                "编辑当前表单的模型列表。按 f 可从原生端点拉取模型，需要已填写 API Key。",
+                "Edits the model list for this form. Press f to fetch from the native endpoint; an API key is required.",
             ),
         ),
         ProviderAddField::OpenCodeModelContextLimit => HelpContent::new(
@@ -1098,8 +1081,8 @@ fn usage_query_field_help(template: UsageQueryTemplate, field: UsageQueryField) 
         UsageQueryField::Template => {
             let body = if matches!(template, UsageQueryTemplate::OfficialSubscription) {
                 help_lines(
-                    "官方 Claude、Codex 和 Gemini 供应商只提供官方订阅模板。该模板读取本机 CLI 的 OAuth 凭据，不需要脚本或额外凭据。",
-                    "Official Claude, Codex, and Gemini providers expose only the official subscription template. It uses local CLI OAuth credentials and needs no script or extra credentials.",
+                    "官方 Claude 和 Codex 供应商只提供官方订阅模板。该模板读取本机 CLI 的 OAuth 凭据，不需要脚本或额外凭据。",
+                    "Official Claude and Codex providers expose only the official subscription template. It uses local CLI OAuth credentials and needs no script or extra credentials.",
                 )
             } else {
                 help_lines(
@@ -1234,5 +1217,36 @@ fn provider_usage_query_overlay_target(app: &App, field: UsageQueryField) -> Hel
     HelpTarget::UsageQueryField {
         template: provider.usage_query_template,
         field,
+    }
+}
+
+#[cfg(test)]
+mod removed_harness_help_tests {
+    use super::{provider_field_help, HelpContent};
+    use crate::app_config::AppType;
+    use crate::cli::tui::form::ProviderAddFormState;
+
+    /// 已删 harness 的名字不允许出现在任何"可达"的 `?` 帮助里。
+    ///
+    /// provider_form 的字段表已经只按 AppType::all() 里的四个 app 生成，所以只要
+    /// 遍历当前 app 能拿到的字段，就等于遍历了用户真正按得到 `?` 的那批帮助；
+    /// Gemini/OpenCode/OpenClaw 自己那几张表单无法构造，它们的文案点名无妨。
+    #[test]
+    fn reachable_provider_help_never_names_a_removed_harness() {
+        for app in AppType::all() {
+            let form = ProviderAddFormState::new(app.clone());
+            for field in form.fields() {
+                let HelpContent { title, lines, .. } = provider_field_help(app.clone(), field);
+                for text in std::iter::once(&title).chain(lines.iter()) {
+                    let lowered = text.to_lowercase();
+                    for removed in ["gemini", "opencode", "openclaw"] {
+                        assert!(
+                            !lowered.contains(removed),
+                            "{app:?} 的 {field:?} 帮助里出现了已删 harness {removed}: {text}"
+                        );
+                    }
+                }
+            }
+        }
     }
 }

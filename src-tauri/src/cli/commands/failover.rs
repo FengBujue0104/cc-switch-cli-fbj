@@ -405,11 +405,14 @@ fn active_proxy_failover_queue_guard_error() -> AppError {
 }
 
 fn takeover_enabled_for(takeovers: &ProxyTakeoverStatus, app_type: &AppType) -> bool {
+    // Gemini 已删：`AppType::Gemini` 只可能来自旧数据解析，本构建不再给它接管状态，
+    // 和 `supports_failover()` 那份名单保持一张嘴。
     match app_type {
         AppType::Claude => takeovers.claude,
         AppType::Codex => takeovers.codex,
-        AppType::Gemini => takeovers.gemini,
-        AppType::OpenCode | AppType::Hermes | AppType::OpenClaw | AppType::Pi => false,
+        AppType::Gemini | AppType::OpenCode | AppType::Hermes | AppType::OpenClaw | AppType::Pi => {
+            false
+        }
     }
 }
 

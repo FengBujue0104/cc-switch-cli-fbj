@@ -2127,10 +2127,13 @@ mod tests {
 
     struct SettingsGuard {
         original: crate::settings::AppSettings,
+        // 后声明 => 后 drop，保证 `original` 写回时仍在沙箱内。
+        _sandbox: crate::test_support::ConfigDirSandbox,
     }
 
     impl SettingsGuard {
         fn with_codex_config_dir(dir: Option<&str>) -> Self {
+            let _sandbox = crate::test_support::ConfigDirSandbox::new();
             let original = crate::settings::get_settings();
             if let Some(home) = crate::config::home_dir() {
                 fs::create_dir_all(home).unwrap();
@@ -2138,7 +2141,7 @@ mod tests {
             let mut settings = original.clone();
             settings.codex_config_dir = dir.map(str::to_string);
             crate::settings::update_settings(settings).unwrap();
-            Self { original }
+            Self { original, _sandbox }
         }
     }
 

@@ -271,13 +271,15 @@ impl ConfigService {
     }
 
     /// 同步当前供应商到对应的 live 配置。
+    ///
+    /// 只遍历 `AppType::all()`。以前这里是写死的六个 harness，于是一份带着旧
+    /// Gemini current 的配置（导入、WebDAV 还原）会命中 `sync_gemini_live`，往已删
+    /// harness 的 live 目录落 `~/.gemini/.env` 和 `~/.gemini/settings.json`。新增
+    /// harness 只要进 `AppType::all()` 就自动带上，不用再回头改这张表。
     pub fn sync_current_providers_to_live(config: &mut MultiAppConfig) -> Result<(), AppError> {
-        Self::sync_current_provider_for_app(config, &AppType::Claude)?;
-        Self::sync_current_provider_for_app(config, &AppType::Codex)?;
-        Self::sync_current_provider_for_app(config, &AppType::Gemini)?;
-        Self::sync_current_provider_for_app(config, &AppType::OpenCode)?;
-        Self::sync_current_provider_for_app(config, &AppType::Hermes)?;
-        Self::sync_current_provider_for_app(config, &AppType::OpenClaw)?;
+        for app_type in AppType::all() {
+            Self::sync_current_provider_for_app(config, &app_type)?;
+        }
         Ok(())
     }
 
@@ -317,7 +319,6 @@ impl ConfigService {
             AppType::OpenClaw => {}
             AppType::Pi => {}
         }
-
         Ok(())
     }
 
@@ -433,6 +434,16 @@ impl ConfigService {
     ) -> Result<(), AppError> {
         use crate::gemini_config::{env_to_json, read_gemini_env};
 
+        // Gemini 已从本构建移除：门槛恒为 `false`，所以这里直接返回。上面那个
+        // `AppType::Gemini` 臂今天是靠外层 `AppType::all()` 的循环挡住的，但
+        // `AppType::from_str` 还能解析出旧 id，任何将来的调用方把 legacy 值传
+        // 进来就会真的写 `~/.gemini`。把门槛放到函数里，这道防线就不依赖调用方
+        // 自觉——和 `src/mcp.rs` 里那几个已删 harness 的同步函数同一个写法。
+        if !crate::sync_policy::should_sync_live(&AppType::Gemini) {
+            log::debug!("Gemini live sync skipped: harness removed from this build");
+            return Ok(());
+        }
+
         let common_config_snippet = config.common_config_snippets.gemini.clone();
         let common_config_snippet_to_apply = if ProviderService::provider_uses_common_config_for_app(
             &AppType::Gemini,
@@ -470,5 +481,71 @@ impl ConfigService {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_support::TestEnvGuard;
+
+    /// 单 harness 的 live 同步不能再依赖"调用方只传 `AppType::all()`"。
+    ///
+    /// `AppType::from_str` 仍然解析旧 id（否则旧数据库行加载即失败），所以任何
+    /// 调用方都可能把一个 legacy 值传进来。以前 `sync_current_provider_for_app`
+    /// 的 Gemini 臂直接调 `sync_gemini_live`，唯一防线是外层循环的名单——这里把
+    /// 防线挪进函数本身：直接拿 `AppType::Gemini` 调它，`~/.gemini` 也必须一个
+    /// 字节都不动。
+    #[test]
+    #[serial_test::serial(home_settings)]
+    fn sync_current_provider_for_app_refuses_to_write_removed_harness_live_config() {
+        let temp_home = tempfile::TempDir::new().expect("create temp home");
+        let _env = TestEnvGuard::isolated(temp_home.path());
+        let gemini_dir = crate::gemini_config::get_gemini_dir();
+        std::fs::create_dir_all(&gemini_dir).expect("create ~/.gemini");
+        std::fs::write(
+            crate::gemini_config::get_gemini_env_path(),
+            "GEMINI_API_KEY=PROXY_MANAGED\nGOOGLE_GEMINI_BASE_URL=http://127.0.0.1:15721\n",
+        )
+        .expect("seed taken-over gemini live config");
+        let env_before =
+            std::fs::read(crate::gemini_config::get_gemini_env_path()).expect("read seeded env");
+
+        let mut config = MultiAppConfig::default();
+        config.ensure_app(&AppType::Gemini);
+        {
+            let manager = config
+                .get_manager_mut(&AppType::Gemini)
+                .expect("gemini manager");
+            manager.current = "p-gemini".to_string();
+            manager.providers.insert(
+                "p-gemini".to_string(),
+                Provider::with_id(
+                    "p-gemini".to_string(),
+                    "Gemini Residual".to_string(),
+                    serde_json::json!({
+                        "env": {
+                            "GEMINI_API_KEY": "legacy-gemini-key",
+                            "GOOGLE_GEMINI_BASE_URL": "https://gemini.example"
+                        }
+                    }),
+                    None,
+                ),
+            );
+        }
+
+        ConfigService::sync_current_provider_for_app(&mut config, &AppType::Gemini)
+            .expect("a removed harness is a no-op, not an error");
+
+        assert_eq!(
+            std::fs::read(crate::gemini_config::get_gemini_env_path())
+                .expect("gemini .env must still exist"),
+            env_before,
+            "a legacy-parsed AppType must not reopen the removed harness's live dir"
+        );
+        assert!(
+            !crate::gemini_config::get_gemini_settings_path().exists(),
+            "sync must not create ~/.gemini/settings.json"
+        );
     }
 }

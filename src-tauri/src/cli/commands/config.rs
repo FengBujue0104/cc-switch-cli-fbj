@@ -465,7 +465,6 @@ fn validate_config() -> Result<(), AppError> {
     // Show some stats
     let claude_count = db.get_all_providers("claude")?.len();
     let codex_count = db.get_all_providers("codex")?.len();
-    let gemini_count = db.get_all_providers("gemini")?.len();
     let mcp_count = db.get_all_mcp_servers()?.len();
     let skills_count = db.get_all_installed_skills()?.len();
 
@@ -473,7 +472,6 @@ fn validate_config() -> Result<(), AppError> {
     println!("{}", highlight("Database Summary:"));
     println!("Claude providers:  {}", claude_count);
     println!("Codex providers:   {}", codex_count);
-    println!("Gemini providers:  {}", gemini_count);
     println!("MCP servers:       {}", mcp_count);
     println!("Skills installed:  {}", skills_count);
 

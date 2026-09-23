@@ -1269,6 +1269,7 @@ mod tests {
     struct EnvGuard {
         _lock: TestHomeSettingsLock,
         old_home: Option<OsString>,
+        old_test_home_override: Option<PathBuf>,
         old_userprofile: Option<OsString>,
         old_config_dir: Option<OsString>,
         old_disable_open: Option<OsString>,
@@ -1280,6 +1281,7 @@ mod tests {
             let lock = lock_test_home_and_settings();
             let home = tempdir().expect("create temp home");
             let old_home = std::env::var_os("HOME");
+            let old_test_home_override = crate::test_support::test_home_override();
             let old_userprofile = std::env::var_os("USERPROFILE");
             let old_config_dir = std::env::var_os("CC_SWITCH_CONFIG_DIR");
             let old_disable_open = std::env::var_os("CC_SWITCH_TEST_DISABLE_OPEN");
@@ -1292,6 +1294,7 @@ mod tests {
             Self {
                 _lock: lock,
                 old_home,
+                old_test_home_override,
                 old_userprofile,
                 old_config_dir,
                 old_disable_open,
@@ -1326,7 +1329,7 @@ mod tests {
                 Some(value) => std::env::set_var("CC_SWITCH_TEST_DISABLE_OPEN", value),
                 None => std::env::remove_var("CC_SWITCH_TEST_DISABLE_OPEN"),
             }
-            set_test_home_override(self.old_home.as_deref().map(Path::new));
+            set_test_home_override(self.old_test_home_override.as_deref());
             crate::settings::reload_test_settings();
         }
     }

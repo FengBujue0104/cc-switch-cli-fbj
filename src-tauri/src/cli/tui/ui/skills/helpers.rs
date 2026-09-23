@@ -28,26 +28,15 @@ pub(super) fn skill_display_name<'a>(name: &'a str, directory: &'a str) -> &'a s
     }
 }
 
+/// 概要行"已启用: ..."里的 harness 名。
+///
+/// 从 `supported_skill_apps()` 派生，不在这个函数里手写清单：手写的那份就是
+/// 已删 harness 复活的位置（旧数据里的勾选可以留着，但不该被拼进这行字）。
 pub(super) fn enabled_skill_apps_text(apps: &crate::app_config::SkillApps) -> String {
-    let mut enabled = Vec::new();
-    if apps.claude {
-        enabled.push("Claude");
-    }
-    if apps.codex {
-        enabled.push("Codex");
-    }
-    if apps.gemini {
-        enabled.push("Gemini");
-    }
-    if apps.opencode {
-        enabled.push("OpenCode");
-    }
-    if apps.hermes {
-        enabled.push("Hermes");
-    }
-    if apps.pi {
-        enabled.push("Pi");
-    }
+    let enabled = crate::services::SkillService::supported_skill_apps()
+        .filter(|app| apps.is_enabled_for(app))
+        .map(|app| app.display_name())
+        .collect::<Vec<_>>();
 
     if enabled.is_empty() {
         texts::none().to_string()

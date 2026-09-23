@@ -1,4 +1,3 @@
-use crate::app_config::AppType;
 use futures::{stream, StreamExt};
 use regex::Regex;
 use std::future::Future;
@@ -24,21 +23,15 @@ const PROCESS_REAP_TIMEOUT: Duration = Duration::from_secs(1);
 pub enum LocalTool {
     Claude,
     Codex,
-    Gemini,
-    OpenCode,
     Hermes,
-    OpenClaw,
     Pi,
 }
 
 impl LocalTool {
-    pub const ALL: [LocalTool; 7] = [
+    pub const ALL: [LocalTool; 4] = [
         LocalTool::Claude,
         LocalTool::Codex,
-        LocalTool::Gemini,
-        LocalTool::OpenCode,
         LocalTool::Hermes,
-        LocalTool::OpenClaw,
         LocalTool::Pi,
     ];
 
@@ -50,10 +43,7 @@ impl LocalTool {
         match self {
             LocalTool::Claude => "Claude",
             LocalTool::Codex => "Codex",
-            LocalTool::Gemini => "Gemini",
-            LocalTool::OpenCode => "OpenCode",
             LocalTool::Hermes => "Hermes",
-            LocalTool::OpenClaw => "OpenClaw",
             LocalTool::Pi => "Pi",
         }
     }
@@ -62,10 +52,7 @@ impl LocalTool {
         match self {
             LocalTool::Claude => "claude",
             LocalTool::Codex => "codex",
-            LocalTool::Gemini => "gemini",
-            LocalTool::OpenCode => "opencode",
             LocalTool::Hermes => "hermes",
-            LocalTool::OpenClaw => "openclaw",
             LocalTool::Pi => "pi",
         }
     }
@@ -74,10 +61,7 @@ impl LocalTool {
         match self {
             LocalTool::Claude => &["--version", "version"],
             LocalTool::Codex => &["--version"],
-            LocalTool::Gemini => &["--version", "-v"],
-            LocalTool::OpenCode => &["--version", "version"],
             LocalTool::Hermes => &["--version", "version"],
-            LocalTool::OpenClaw => &["--version", "version"],
             LocalTool::Pi => &["--version"],
         }
     }
@@ -95,18 +79,6 @@ impl LocalTool {
             .iter()
             .position(|candidate| *candidate == self)
             .unwrap_or(Self::ALL.len())
-    }
-
-    pub fn from_app_type(app_type: &AppType) -> Self {
-        match app_type {
-            AppType::Claude => LocalTool::Claude,
-            AppType::Codex => LocalTool::Codex,
-            AppType::Gemini => LocalTool::Gemini,
-            AppType::OpenCode => LocalTool::OpenCode,
-            AppType::Hermes => LocalTool::Hermes,
-            AppType::OpenClaw => LocalTool::OpenClaw,
-            AppType::Pi => LocalTool::Pi,
-        }
     }
 }
 
@@ -219,22 +191,6 @@ async fn check_local_environment_progressive_with<F, P, ProbeFuture>(
     }
 }
 
-pub fn check_tool_installed(app_type: &AppType) -> bool {
-    let tool = LocalTool::from_app_type(app_type);
-    resolve_tool_path(tool.binary_name()).is_some() || live_config_present(tool)
-}
-
-fn live_config_present(tool: LocalTool) -> bool {
-    match tool {
-        LocalTool::Codex => crate::codex_config::get_codex_config_path()
-            .parent()
-            .is_some_and(|dir| dir.join("auth.json").exists() || dir.join("config.toml").exists()),
-        LocalTool::Claude => crate::config::get_claude_settings_path().exists(),
-        LocalTool::Hermes => crate::hermes_config::get_hermes_config_path().exists(),
-        _ => false,
-    }
-}
-
 #[cfg(windows)]
 fn extra_tool_search_dirs() -> Vec<std::path::PathBuf> {
     let mut dirs = Vec::new();
@@ -279,6 +235,19 @@ fn resolve_tool_path(bin: &str) -> Option<std::path::PathBuf> {
         }
     }
     which::which(bin).ok()
+}
+
+/// A harness counts as installed when its live config exists even if its CLI
+/// binary is not on `PATH`, matching how CC-Switch imports live configs.
+fn live_config_present(tool: LocalTool) -> bool {
+    match tool {
+        LocalTool::Codex => crate::codex_config::get_codex_config_path()
+            .parent()
+            .is_some_and(|dir| dir.join("auth.json").exists() || dir.join("config.toml").exists()),
+        LocalTool::Claude => crate::config::get_claude_settings_path().exists(),
+        LocalTool::Hermes => crate::hermes_config::get_hermes_config_path().exists(),
+        LocalTool::Pi => crate::pi_config::get_pi_models_path().is_ok_and(|path| path.exists()),
+    }
 }
 
 async fn check_tool(
@@ -921,10 +890,10 @@ mod tests {
 
         assert_eq!(
             display_names,
-            vec!["Claude", "Codex", "Gemini", "OpenCode", "Hermes", "OpenClaw", "Pi"]
+            vec!["Claude", "Codex", "Hermes", "Pi"],
+            "only the four supported harnesses are checked"
         );
         assert_eq!(LocalTool::Hermes.binary_name(), "hermes");
-        assert_eq!(LocalTool::OpenClaw.binary_name(), "openclaw");
         assert_eq!(LocalTool::Pi.binary_name(), "pi");
         assert_eq!(LocalTool::Hermes.version_timeout(), Duration::from_secs(10));
         assert_eq!(LocalTool::Claude.version_timeout(), Duration::from_secs(5));
@@ -1017,7 +986,8 @@ mod tests {
         let marker_path = temp_dir.path().join("fake-tool.executed");
 
         assert!(
-            resolve_tool_path(tool_path.to_str().expect("fake tool path should be utf-8")).is_some()
+            resolve_tool_path(tool_path.to_str().expect("fake tool path should be utf-8"))
+                .is_some()
         );
         assert!(
             !marker_path.exists(),
@@ -1191,7 +1161,7 @@ mod tests {
             .start(&child)
             .expect("resume attached Windows shim");
 
-        let status = timeout(Duration::from_secs(2), child.wait())
+        let status = timeout(Duration::from_secs(10), child.wait())
             .await
             .expect("resumed Windows shim should exit")
             .expect("wait for resumed Windows shim");

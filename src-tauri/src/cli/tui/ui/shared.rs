@@ -1629,16 +1629,6 @@ pub(super) fn summary_with_refresh_indicator(
     spans
 }
 
-/// The indicator on its own row, for a body that has nothing else to show yet.
-pub(super) fn loading_indicator_line(
-    tick: u64,
-    theme: &super::theme::Theme,
-    label: &str,
-    percent: Option<u8>,
-) -> Line<'static> {
-    Line::from(labelled_spinner_spans(tick, theme, label, percent))
-}
-
 // Deterministic sync state for render tests. The services-side progress lives
 // in process-global atomics that other tests read concurrently, so the TUI
 // reads through this thread-local seam instead of poking the global.
@@ -1711,15 +1701,4 @@ pub(super) fn sync_escalation(app: &App) -> Option<u8> {
         app.tick,
         session_usage_sync_progress(),
     )
-}
-
-/// The indicator a surface shows while the background session import runs,
-/// with a percentage only for rounds slow enough to owe the user an
-/// explanation. `None` when idle.
-pub(super) fn session_sync_indicator_spans(
-    app: &App,
-    theme: &super::theme::Theme,
-) -> Option<Vec<Span<'static>>> {
-    session_usage_sync_active()
-        .then(|| refresh_indicator_spans(app.tick, theme, sync_escalation(app)))
 }

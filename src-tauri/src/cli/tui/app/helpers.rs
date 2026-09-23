@@ -1752,84 +1752,36 @@ pub(crate) fn cycle_app_type(current: &AppType, dir: i8) -> Option<AppType> {
     crate::settings::next_visible_app(&visible_apps, current, dir).filter(|next| next != current)
 }
 
-pub(crate) fn app_type_picker_index(app_type: &AppType) -> usize {
-    match app_type {
-        AppType::Claude => 0,
-        AppType::Codex => 1,
-        AppType::Gemini => 2,
-        AppType::OpenCode => 3,
-        AppType::Hermes => 4,
-        AppType::OpenClaw => 5,
-        AppType::Pi => 6,
-    }
+/// 三个 apps picker 各自渲染出来的 harness 列表。
+///
+/// `selected` 存的是**行下标**，所以下标的来龙去脉必须和渲染那一份列表完全
+/// 一致：写死一张 `Gemini=2, OpenCode=3` 的序号表，就等于把已删 harness 留成
+/// 一个用户还能按到的行，同时让渲染行和 `Space`/`Enter` 命中的 harness 错位。
+pub(crate) fn mcp_picker_apps() -> Vec<AppType> {
+    crate::services::McpService::supported_mcp_apps().collect()
 }
 
-pub(crate) fn four_app_picker_index(app_type: &AppType) -> usize {
-    app_type_picker_index(app_type).min(4)
+pub(crate) fn skills_picker_apps() -> Vec<AppType> {
+    crate::services::SkillService::supported_skill_apps().collect()
 }
 
-pub(crate) fn skills_app_picker_index(app_type: &AppType) -> usize {
-    match app_type {
-        AppType::Pi | AppType::OpenClaw => 5,
-        _ => app_type_picker_index(app_type),
-    }
+pub(crate) fn snippet_picker_apps() -> Vec<AppType> {
+    AppType::all().collect()
 }
 
-pub(crate) fn skill_app_type_for_picker_index(index: usize) -> AppType {
-    if index == 5 {
-        AppType::Pi
-    } else {
-        app_type_for_picker_index(index)
-    }
+/// `app_type` 在 `apps` 中的行下标；不在列表里时落到第一行，避免越界 panic。
+pub(crate) fn picker_index_for_app(apps: &[AppType], app_type: &AppType) -> usize {
+    apps.iter().position(|app| app == app_type).unwrap_or(0)
 }
 
-pub(crate) fn app_type_for_picker_index(index: usize) -> AppType {
-    match index {
-        1 => AppType::Codex,
-        2 => AppType::Gemini,
-        3 => AppType::OpenCode,
-        4 => AppType::Hermes,
-        5 => AppType::OpenClaw,
-        6 => AppType::Pi,
-        _ => AppType::Claude,
-    }
+/// `apps` 中第 `index` 行的 harness；越界时同样落到第一行。
+pub(crate) fn picker_app_for_index(apps: &[AppType], index: usize) -> AppType {
+    apps.get(index).cloned().unwrap_or(AppType::Claude)
 }
 
-#[cfg(test)]
-pub(crate) fn snippet_picker_index_for_app_type(app_type: &AppType) -> usize {
-    app_type_picker_index(app_type)
-}
-
-pub(crate) fn snippet_picker_app_type(index: usize) -> AppType {
-    app_type_for_picker_index(index)
-}
-
-pub(crate) fn sync_method_picker_index(method: SyncMethod) -> usize {
-    match method {
-        SyncMethod::Auto | SyncMethod::Symlink => 0,
-        SyncMethod::Copy => 1,
-    }
-}
-
-pub(crate) fn sync_method_for_picker_index(index: usize) -> SyncMethod {
-    match index {
-        1 => SyncMethod::Copy,
-        _ => SyncMethod::Symlink,
-    }
-}
-
-pub(crate) fn storage_location_picker_index(location: SkillStorageLocation) -> usize {
-    match location {
-        SkillStorageLocation::CcSwitch => 0,
-        SkillStorageLocation::Unified => 1,
-    }
-}
-
-pub(crate) fn storage_location_for_picker_index(index: usize) -> SkillStorageLocation {
-    match index {
-        1 => SkillStorageLocation::Unified,
-        _ => SkillStorageLocation::CcSwitch,
-    }
+/// `apps` 的最后一行下标，供 `Down` 键封顶使用。
+pub(crate) fn picker_last_index(apps: &[AppType]) -> usize {
+    apps.len().saturating_sub(1)
 }
 
 pub(crate) fn openclaw_tools_profile_picker_index(profile: Option<&str>) -> Option<usize> {
@@ -1867,5 +1819,57 @@ pub(crate) fn is_open_external_editor_shortcut(key: KeyEvent) -> bool {
     match key.code {
         KeyCode::Char('o' | 'O') => key.modifiers.contains(KeyModifiers::CONTROL),
         _ => false,
+    }
+}
+
+#[cfg(test)]
+mod picker_index_tests {
+    use super::*;
+
+    /// 三个 apps picker 的 `selected` 下标必须和各自渲染出来的那一段列表严格对齐：
+    /// 从列表里任取一个 harness 求下标，再拿这个下标反查，必须回到同一个 harness。
+    ///
+    /// 以前这里是 `Gemini=2, OpenCode=3` 的硬编码序号表，而渲染列表已经换成从
+    /// `supported_*_apps()` 推导，于是渲染行和 `Space`/`Enter` 命中的 harness 从第 2 行
+    /// 开始整体错位，越界下标还能落到根本不存在的行上。这个测试就是钉住"对齐"本身。
+    #[test]
+    fn picker_index_round_trips_across_every_rendered_list() {
+        for apps in [
+            mcp_picker_apps(),
+            skills_picker_apps(),
+            snippet_picker_apps(),
+        ] {
+            assert!(!apps.is_empty(), "picker list must not be empty");
+            for app in &apps {
+                let index = picker_index_for_app(&apps, app);
+                assert_eq!(
+                    picker_app_for_index(&apps, index),
+                    *app,
+                    "{app:?} maps to row {index} of {apps:?} but that row holds another harness"
+                );
+            }
+            // Down 键封顶必须落在列表最后一行，不能超出渲染行数。
+            assert_eq!(picker_last_index(&apps), apps.len() - 1);
+        }
+    }
+
+    /// `AppType::all()` 里每个 harness 都必须在 skills/snippet picker 里有一行；
+    /// MCP picker 则是它的子集（不含 Pi）。
+    #[test]
+    fn picker_lists_cover_exactly_the_supported_harnesses() {
+        assert_eq!(skills_picker_apps(), AppType::all().collect::<Vec<_>>());
+        assert_eq!(snippet_picker_apps(), AppType::all().collect::<Vec<_>>());
+        assert!(mcp_picker_apps().len() < AppType::all().count());
+        assert!(mcp_picker_apps()
+            .iter()
+            .all(|app| AppType::all().any(|a| a == *app)));
+    }
+
+    /// 当前 app 不在渲染列表里时（Pi 打开 MCP picker），下标必须回落到列表内。
+    #[test]
+    fn picker_index_falls_back_inside_the_list_for_unsupported_app() {
+        let mcp_apps = mcp_picker_apps();
+        assert!(!mcp_apps.contains(&AppType::Pi));
+        assert!(picker_index_for_app(&mcp_apps, &AppType::Pi) < mcp_apps.len());
     }
 }

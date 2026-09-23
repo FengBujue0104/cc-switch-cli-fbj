@@ -113,6 +113,7 @@ fn prompt_rename_command_updates_prompt_name() {
 
 #[test]
 #[serial]
+#[ignore = "requires a default external editor"]
 fn prompt_create_command_uses_explicit_name() {
     let _guard = lock_test_mutex();
     reset_test_fs();
@@ -208,6 +209,7 @@ fn prompt_rename_command_can_update_id_without_prompting_for_name() {
 
 #[test]
 #[serial]
+#[ignore = "requires a default external editor"]
 fn prompt_create_command_accepts_custom_id_and_description() {
     let _guard = lock_test_mutex();
     reset_test_fs();

@@ -28,6 +28,17 @@ mod app_config {
                 AppType::Pi => "pi",
             }
         }
+
+        /// 与 `src/app_config.rs::AppType::all()` 一致：本构建只保留这四个 harness。
+        pub fn all() -> impl Iterator<Item = AppType> {
+            [
+                AppType::Claude,
+                AppType::Codex,
+                AppType::Hermes,
+                AppType::Pi,
+            ]
+            .into_iter()
+        }
     }
 }
 
@@ -51,6 +62,17 @@ mod config {
     use crate::error::AppError;
 
     pub(crate) fn home_dir() -> Option<PathBuf> {
+        // `HOME`/`USERPROFILE` come first: the guards in this file set those but not
+        // `CC_SWITCH_TEST_HOME`, so an ambient `CC_SWITCH_TEST_HOME` must not
+        // outrank them and escape the temp home.
+        for key in ["HOME", "USERPROFILE", "CC_SWITCH_TEST_HOME"] {
+            if let Some(home) = std::env::var_os(key) {
+                let home = PathBuf::from(home);
+                if !home.as_os_str().is_empty() {
+                    return Some(home);
+                }
+            }
+        }
         dirs::home_dir()
     }
 

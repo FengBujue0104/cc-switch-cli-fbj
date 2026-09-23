@@ -671,6 +671,14 @@ impl ProviderService {
     }
 
     pub fn sync_openclaw_to_live(state: &AppState) -> Result<(), AppError> {
+        // OpenClaw 已从本构建移除。调用方 `config openclaw set-dir` 目前自己带这道
+        // 门槛，但它是 `pub` 的：把检查收进函数，别的调用方（或以后新接的入口）再
+        // 传进来也不会写 `~/.openclaw`。同 `ConfigService::sync_gemini_live` 的写法。
+        if !crate::sync_policy::should_sync_live(&AppType::OpenClaw) {
+            log::debug!("OpenClaw live sync skipped: harness removed from this build");
+            return Ok(());
+        }
+
         let (providers, snippet) = {
             let guard = state.config.read().map_err(AppError::from)?;
             let Some(manager) = guard.get_manager(&AppType::OpenClaw) else {
@@ -2763,8 +2771,8 @@ impl ProviderService {
             AppType::OpenClaw => Self::set_openclaw_default_model(provider_id, model_id),
             _ => Err(AppError::localized(
                 "provider.set_default_model.unsupported",
-                "只有 Hermes 和 OpenClaw 支持设置默认供应商/模型",
-                "Only Hermes and OpenClaw support setting a default provider/model",
+                "只有 Hermes 支持设置默认供应商",
+                "Only Hermes supports setting a default provider",
             )),
         }
     }
@@ -3155,6 +3163,27 @@ impl ProviderService {
         previous_common_config_snippet: Option<&str>,
         apply_common_config: bool,
     ) -> Result<PreparedLiveWrite, AppError> {
+        // 已删 harness 的 live 写入只有这一个收口：`PreparedLiveWrite` 的所有变体都在
+        // 这里构造，两条调用路径（`write_live_snapshot`、
+        // `apply_prepared_post_commit_action`）都从这过。Claude/Codex/Gemini 三个臂
+        // 各自在 `prepare_*_live_write` 里还带一道 `should_sync_live` 门槛，而
+        // OpenCode/OpenClaw 两个臂原先什么都没有——`AppType::from_str` 仍能解析出旧
+        // id，调用方只要把 legacy 值传进来就会真的写 `~/.config/opencode` /
+        // `~/.openclaw`。门槛放在这里，防线就不依赖每个调用方自觉，也和
+        // `src/mcp.rs`、`ConfigService::sync_gemini_live` 的写法保持一致。
+        //
+        // Gemini 是唯一的例外，不能在这里拦：它的臂在门槛后面返回的是
+        // `PreparedLiveWrite::GeminiSecurityFlag`，那一路只更新 cc-switch 自己的
+        // `settings.json`（`ensure_gemini_app_security_flag`），一个字节都不碰
+        // `~/.gemini`。在这里一并挡掉会让切到 Google Official / PackyCode 供应商后
+        // `security.auth.selectedType` 停在旧值——用户下次启动 Gemini CLI 会拿到
+        // 错误的鉴权方式。所以 Gemini 放过去，由 `prepare_gemini_live_write` 里那道
+        // 门槛自己给出非写入的结果。
+        if !crate::sync_policy::should_sync_live(app_type) && !matches!(app_type, AppType::Gemini) {
+            log::debug!("live snapshot skipped: {app_type:?} is not part of this build");
+            return Ok(PreparedLiveWrite::Noop);
+        }
+
         let apply_common_config = Self::resolve_live_apply_common_config(
             app_type,
             provider,

@@ -104,32 +104,32 @@ fn list_servers(app_type: AppType) -> Result<(), AppError> {
 
     // 创建表格
     let mut table = create_table();
-    table.set_header(vec![
-        "ID", "Name", "Claude", "Codex", "Gemini", "OpenCode", "Hermes", "Tags",
-    ]);
+    // 列只列真正能承接 MCP 投影的 harness（`supported_mcp_apps()`）。
+    // 硬编码一份列名表就会把它变成用户可见的清单，而那份清单必须跟着
+    // `AppType::all()` 一起收窄——否则已删的 Gemini/OpenCode 会在这里复活。
+    let columns = McpService::supported_mcp_apps().collect::<Vec<_>>();
+    let mut header = vec!["ID", "Name"];
+    header.extend(columns.iter().map(|app| app.display_name()));
+    header.push("Tags");
+    table.set_header(header);
 
     // 按 ID 排序
     let mut server_list: Vec<_> = servers.into_iter().collect();
     server_list.sort_by(|(a, _), (b, _)| a.cmp(b));
 
     for (id, server) in server_list {
-        let claude_marker = if server.apps.claude { "✓" } else { " " };
-        let codex_marker = if server.apps.codex { "✓" } else { " " };
-        let gemini_marker = if server.apps.gemini { "✓" } else { " " };
-        let opencode_marker = if server.apps.opencode { "✓" } else { " " };
-        let hermes_marker = if server.apps.hermes { "✓" } else { " " };
         let tags = server.tags.join(", ");
 
-        let row = vec![
-            id.clone(),
-            server.name.clone(),
-            claude_marker.to_string(),
-            codex_marker.to_string(),
-            gemini_marker.to_string(),
-            opencode_marker.to_string(),
-            hermes_marker.to_string(),
-            tags,
-        ];
+        let mut row = vec![id.clone(), server.name.clone()];
+        row.extend(columns.iter().map(|app| {
+            if server.apps.is_enabled_for(app) {
+                "✓"
+            } else {
+                " "
+            }
+            .to_string()
+        }));
+        row.push(tags);
 
         table.add_row(row);
     }
@@ -159,36 +159,12 @@ fn delete_server(id: &str) -> Result<(), AppError> {
     println!("ID:   {}", id);
     println!("Name: {}", server.name);
 
-    let enabled_apps: Vec<&str> = vec![
-        if server.apps.claude {
-            Some("Claude")
-        } else {
-            None
-        },
-        if server.apps.codex {
-            Some("Codex")
-        } else {
-            None
-        },
-        if server.apps.gemini {
-            Some("Gemini")
-        } else {
-            None
-        },
-        if server.apps.opencode {
-            Some("OpenCode")
-        } else {
-            None
-        },
-        if server.apps.hermes {
-            Some("Hermes")
-        } else {
-            None
-        },
-    ]
-    .into_iter()
-    .flatten()
-    .collect();
+    // 同上：只报告本构建真正承接 MCP 的 harness，已删的 Gemini/OpenCode
+    // 即便在旧数据里还打着勾也不该出现在这里。
+    let enabled_apps: Vec<&str> = McpService::supported_mcp_apps()
+        .filter(|app| server.apps.is_enabled_for(app))
+        .map(|app| app.display_name())
+        .collect();
 
     if !enabled_apps.is_empty() {
         println!("Enabled for: {}", enabled_apps.join(", "));

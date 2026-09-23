@@ -2,6 +2,12 @@
 //!
 //! 启动时调用 `Database::init_default_official_providers` 把这些条目
 //! 写入 `providers` 表，让所有用户都能看到一个"一键切回官方"的入口。
+//!
+//! 只覆盖 `AppType::all()` 里的 harness。给已删 harness 留一条种子，等于让
+//! 全新安装也自动长出一行 Gemini 供应商，然后顺着 `config export` / WebDAV /
+//! S3 备份一直传下去——`store::initialize_common_config_snippets` 早就写明
+//! 不再给这些 harness 播种，两处必须保持一致。旧库里已有的那行保持原样读取，
+//! 不删不覆写。
 
 use crate::app_config::AppType;
 
@@ -33,15 +39,6 @@ pub(crate) const OFFICIAL_SEEDS: &[OfficialProviderSeed] = &[
         icon: "openai",
         icon_color: "#00A67E",
         settings_config_json: r#"{"auth":{},"config":""}"#,
-    },
-    OfficialProviderSeed {
-        id: "gemini-official",
-        app_type: AppType::Gemini,
-        name: "Google Official",
-        website_url: "https://ai.google.dev/",
-        icon: "gemini",
-        icon_color: "#4285F4",
-        settings_config_json: r#"{"env":{},"config":{}}"#,
     },
 ];
 

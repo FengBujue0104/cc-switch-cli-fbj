@@ -526,14 +526,14 @@ Authorization = "Bearer legacy-token"
 }
 
 #[test]
-fn upsert_server_skips_live_sync_when_gemini_uninitialized() {
+fn upsert_server_skips_live_sync_when_codex_uninitialized() {
     let _guard = lock_test_mutex();
     reset_test_fs();
     let home = ensure_test_home();
 
     assert!(
-        !home.join(".gemini").exists(),
-        "precondition: ~/.gemini should not exist"
+        !home.join(".codex").exists(),
+        "precondition: ~/.codex should not exist"
     );
 
     let mut config = MultiAppConfig::default();
@@ -542,16 +542,16 @@ fn upsert_server_skips_live_sync_when_gemini_uninitialized() {
     let state = state_from_config(config);
 
     let server = McpServer {
-        id: "gemini-server".to_string(),
-        name: "Gemini Server".to_string(),
+        id: "codex-server".to_string(),
+        name: "Codex Server".to_string(),
         server: json!({
             "type": "http",
             "url": "http://localhost:1234"
         }),
         apps: McpApps {
             claude: false,
-            codex: false,
-            gemini: true,
+            codex: true,
+            gemini: false,
             opencode: false,
             hermes: false,
         },
@@ -564,48 +564,35 @@ fn upsert_server_skips_live_sync_when_gemini_uninitialized() {
     McpService::upsert_server(&state, server).expect("upsert server should succeed");
 
     assert!(
-        !home.join(".gemini").exists(),
-        "should_sync=auto: upsert should not create ~/.gemini when uninitialized"
+        !home.join(".codex").exists(),
+        "should_sync=auto: upsert should not create ~/.codex when uninitialized"
     );
 }
 
 #[test]
-fn upsert_server_disables_app_removes_from_gemini_live() {
+fn upsert_server_disables_app_removes_from_codex_live() {
     let _guard = lock_test_mutex();
     reset_test_fs();
     let home = ensure_test_home();
     let url = "http://localhost:1234";
 
-    // 预先写入 Gemini live 配置，包含待删除的 MCP server
-    let gemini_dir = home.join(".gemini");
-    fs::create_dir_all(&gemini_dir).expect("create gemini dir");
-    let settings_path = gemini_dir.join("settings.json");
-    let settings = json!({
-        "mcpServers": {
-            "remove_me": {
-                "httpUrl": url
-            }
-        }
-    });
+    // 预先写入 Codex live 配置，包含待删除的 MCP server
+    let codex_dir = home.join(".codex");
+    fs::create_dir_all(&codex_dir).expect("create codex dir");
+    let config_path = codex_dir.join("config.toml");
     fs::write(
-        &settings_path,
-        serde_json::to_string_pretty(&settings).expect("serialize gemini settings"),
+        &config_path,
+        "[mcp_servers.remove_me]\nurl = \"http://localhost:1234\"\n",
     )
-    .expect("seed ~/.gemini/settings.json");
+    .expect("seed ~/.codex/config.toml");
 
-    let seeded_text = fs::read_to_string(&settings_path).expect("read gemini settings after seed");
-    let seeded_json: serde_json::Value =
-        serde_json::from_str(&seeded_text).expect("parse gemini settings after seed");
-    let seeded_present = seeded_json
-        .get("mcpServers")
-        .and_then(|v| v.as_object())
-        .is_some_and(|mcp_servers| mcp_servers.contains_key("remove_me"));
+    let seeded_text = fs::read_to_string(&config_path).expect("read codex config after seed");
     assert!(
-        seeded_present,
-        "seeded ~/.gemini/settings.json should include remove_me"
+        seeded_text.contains("[mcp_servers.remove_me]"),
+        "seeded ~/.codex/config.toml should include remove_me: {seeded_text}"
     );
 
-    // 初始化统一结构：旧值 Gemini = true
+    // 初始化统一结构：旧值 Codex = true
     let mut config = MultiAppConfig::default();
     config.mcp.servers = Some(HashMap::new());
     config.mcp.servers.as_mut().unwrap().insert(
@@ -619,8 +606,8 @@ fn upsert_server_disables_app_removes_from_gemini_live() {
             }),
             apps: McpApps {
                 claude: false,
-                codex: false,
-                gemini: true,
+                codex: true,
+                gemini: false,
                 opencode: false,
                 hermes: false,
             },
@@ -633,7 +620,7 @@ fn upsert_server_disables_app_removes_from_gemini_live() {
 
     let state = state_from_config(config);
 
-    // 模拟“取消勾选 Gemini”
+    // 模拟“取消勾选 Codex”
     let server = McpServer {
         id: "remove_me".to_string(),
         name: "Remove Me".to_string(),
@@ -656,42 +643,29 @@ fn upsert_server_disables_app_removes_from_gemini_live() {
 
     McpService::upsert_server(&state, server).expect("upsert server succeeds");
 
-    // 断言：Gemini live 中应移除该 server
-    let settings_text = fs::read_to_string(&settings_path).expect("read gemini settings");
-    let settings_json: serde_json::Value =
-        serde_json::from_str(&settings_text).expect("parse gemini settings");
-    let remove_me_present = settings_json
-        .get("mcpServers")
-        .and_then(|v| v.as_object())
-        .is_some_and(|mcp_servers| mcp_servers.contains_key("remove_me"));
+    // 断言：Codex live 中应移除该 server
+    let settings_text = fs::read_to_string(&config_path).expect("read codex config");
     assert!(
-        !remove_me_present,
-        "upsert with Gemini disabled should remove it from ~/.gemini/settings.json, got: {settings_text}"
+        !settings_text.contains("remove_me"),
+        "upsert with Codex disabled should remove it from ~/.codex/config.toml, got: {settings_text}"
     );
 }
 
 #[test]
-fn sync_all_enabled_removes_disabled_gemini_server_from_live_config() {
+fn sync_all_enabled_removes_disabled_codex_server_from_live_config() {
     let _guard = lock_test_mutex();
     reset_test_fs();
     let home = ensure_test_home();
     let url = "http://localhost:1234";
 
-    let gemini_dir = home.join(".gemini");
-    fs::create_dir_all(&gemini_dir).expect("create gemini dir");
-    let settings_path = gemini_dir.join("settings.json");
-    let settings = json!({
-        "mcpServers": {
-            "remove_me": {
-                "httpUrl": url
-            }
-        }
-    });
+    let codex_dir = home.join(".codex");
+    fs::create_dir_all(&codex_dir).expect("create codex dir");
+    let config_path = codex_dir.join("config.toml");
     fs::write(
-        &settings_path,
-        serde_json::to_string_pretty(&settings).expect("serialize gemini settings"),
+        &config_path,
+        "[mcp_servers.remove_me]\nurl = \"http://localhost:1234\"\n",
     )
-    .expect("seed ~/.gemini/settings.json");
+    .expect("seed ~/.codex/config.toml");
 
     let mut config = MultiAppConfig::default();
     config.mcp.servers = Some(HashMap::new());
@@ -723,16 +697,10 @@ fn sync_all_enabled_removes_disabled_gemini_server_from_live_config() {
 
     McpService::sync_all_enabled(&state).expect("sync_all_enabled succeeds");
 
-    let settings_text = fs::read_to_string(&settings_path).expect("read gemini settings");
-    let settings_json: serde_json::Value =
-        serde_json::from_str(&settings_text).expect("parse gemini settings");
-    let remove_me_present = settings_json
-        .get("mcpServers")
-        .and_then(|v| v.as_object())
-        .is_some_and(|mcp_servers| mcp_servers.contains_key("remove_me"));
+    let settings_text = fs::read_to_string(&config_path).expect("read codex config");
     assert!(
-        !remove_me_present,
-        "sync_all_enabled should remove disabled Gemini binding from live config, got: {settings_text}"
+        !settings_text.contains("remove_me"),
+        "sync_all_enabled should remove disabled Codex binding from live config, got: {settings_text}"
     );
 }
 
@@ -745,21 +713,14 @@ fn sync_all_enabled_continues_after_another_app_fails() {
     fs::create_dir_all(home.join(".claude")).expect("create Claude dir");
     fs::write(get_claude_mcp_path(), "{\"mcpServers\":").expect("seed invalid Claude MCP config");
 
-    let gemini_dir = home.join(".gemini");
-    fs::create_dir_all(&gemini_dir).expect("create Gemini dir");
-    let gemini_path = gemini_dir.join("settings.json");
+    let codex_dir = home.join(".codex");
+    fs::create_dir_all(&codex_dir).expect("create Codex dir");
+    let codex_path = codex_dir.join("config.toml");
     fs::write(
-        &gemini_path,
-        json!({
-            "mcpServers": {
-                "remove_me": {
-                    "httpUrl": "http://localhost:1234"
-                }
-            }
-        })
-        .to_string(),
+        &codex_path,
+        "[mcp_servers.remove_me]\nurl = \"http://localhost:1234\"\n",
     )
-    .expect("seed Gemini settings");
+    .expect("seed Codex config");
 
     let mut config = MultiAppConfig::default();
     config.mcp.servers = Some(HashMap::from([(
@@ -787,29 +748,23 @@ fn sync_all_enabled_continues_after_another_app_fails() {
         "aggregate error should identify the failed app: {error}"
     );
 
-    let gemini: serde_json::Value = serde_json::from_str(
-        &fs::read_to_string(&gemini_path).expect("read Gemini settings after sync"),
-    )
-    .expect("parse Gemini settings after sync");
+    let codex_text = fs::read_to_string(&codex_path).expect("read Codex config after sync");
     assert!(
-        gemini
-            .get("mcpServers")
-            .and_then(serde_json::Value::as_object)
-            .is_none_or(|servers| !servers.contains_key("remove_me")),
-        "Gemini projection must still run after Claude fails: {gemini}"
+        !codex_text.contains("remove_me"),
+        "Codex projection must still run after Claude fails: {codex_text}"
     );
 }
 
 #[test]
-fn set_apps_replaces_matrix_and_syncs_opencode_live_config() {
+fn set_apps_replaces_matrix_and_syncs_codex_live_config() {
     let _guard = lock_test_mutex();
     reset_test_fs();
     let home = ensure_test_home();
 
-    let opencode_dir = home.join(".config").join("opencode");
-    fs::create_dir_all(&opencode_dir).expect("create opencode dir");
-    let opencode_path = opencode_dir.join("opencode.json");
-    fs::write(&opencode_path, json!({ "mcp": {} }).to_string()).expect("seed opencode config");
+    let codex_dir = home.join(".codex");
+    fs::create_dir_all(&codex_dir).expect("create codex dir");
+    let codex_path = codex_dir.join("config.toml");
+    fs::write(&codex_path, "").expect("seed empty codex config");
 
     let mut config = MultiAppConfig::default();
     config.mcp.servers = Some(HashMap::new());
@@ -833,7 +788,7 @@ fn set_apps_replaces_matrix_and_syncs_opencode_live_config() {
     let state = state_from_config(config);
 
     let apps = McpApps {
-        opencode: true,
+        codex: true,
         ..Default::default()
     };
     assert!(
@@ -850,25 +805,20 @@ fn set_apps_replaces_matrix_and_syncs_opencode_live_config() {
             .expect("unified servers")
             .get("matrix-server")
             .expect("matrix server exists");
+        assert!(server.apps.codex, "Codex matrix bit should be enabled");
         assert!(
-            server.apps.opencode,
-            "OpenCode matrix bit should be enabled"
-        );
-        assert!(
-            !server.apps.claude && !server.apps.codex && !server.apps.gemini && !server.apps.hermes,
+            !server.apps.claude
+                && !server.apps.gemini
+                && !server.apps.opencode
+                && !server.apps.hermes,
             "set_apps should replace the full supported-app matrix"
         );
     }
 
-    let opencode_text = fs::read_to_string(&opencode_path).expect("read opencode config");
-    let opencode_json: serde_json::Value =
-        serde_json::from_str(&opencode_text).expect("parse opencode config");
+    let codex_text = fs::read_to_string(&codex_path).expect("read codex config");
     assert!(
-        opencode_json
-            .get("mcp")
-            .and_then(|mcp| mcp.as_object())
-            .is_some_and(|mcp| mcp.contains_key("matrix-server")),
-        "enabling OpenCode should write the live MCP config, got: {opencode_text}"
+        codex_text.contains("matrix-server"),
+        "enabling Codex should write the live MCP config, got: {codex_text}"
     );
 
     assert!(
@@ -877,14 +827,9 @@ fn set_apps_replaces_matrix_and_syncs_opencode_live_config() {
         "existing server should be updated"
     );
 
-    let opencode_text = fs::read_to_string(&opencode_path).expect("read opencode config");
-    let opencode_json: serde_json::Value =
-        serde_json::from_str(&opencode_text).expect("parse opencode config");
+    let codex_text = fs::read_to_string(&codex_path).expect("read codex config");
     assert!(
-        opencode_json
-            .get("mcp")
-            .and_then(|mcp| mcp.as_object())
-            .is_none_or(|mcp| !mcp.contains_key("matrix-server")),
-        "disabling OpenCode should remove the live MCP config, got: {opencode_text}"
+        !codex_text.contains("matrix-server"),
+        "disabling Codex should remove the live MCP config, got: {codex_text}"
     );
 }

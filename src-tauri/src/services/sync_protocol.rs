@@ -381,18 +381,20 @@ async fn ensure_restore_allowed() -> Result<(), AppError> {
         ));
     }
 
-    let takeover_active = proxy_service
-        .is_app_takeover_active(&crate::AppType::Claude)
-        .await
-        .map_err(AppError::Message)?
-        || proxy_service
-            .is_app_takeover_active(&crate::AppType::Codex)
+    // 接管只能发生在 `supports_failover()` 的 harness 上，所以探测也要按同一个
+    // 谓词派生。这里以前手抄了一份含 Gemini 的清单：清理之后 `~/.gemini` 里残留
+    // 的 PROXY_MANAGED 标记会让云同步恢复被一条和用户无关的错误挡住。
+    let mut takeover_active = false;
+    for app in crate::AppType::all().filter(|app| app.supports_failover()) {
+        if proxy_service
+            .is_app_takeover_active(&app)
             .await
             .map_err(AppError::Message)?
-        || proxy_service
-            .is_app_takeover_active(&crate::AppType::Gemini)
-            .await
-            .map_err(AppError::Message)?;
+        {
+            takeover_active = true;
+            break;
+        }
+    }
     if takeover_active {
         return Err(localized(
             "sync.restore_takeover_active",

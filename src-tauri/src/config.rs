@@ -224,13 +224,31 @@ fn is_system_dir(path: &Path) -> bool {
         }
     }
 
-    // Windows: 盘符根目录（如 C:\）
+    // Windows: 盘符根目录（如 C:\、C:、\\?\C:\）
+    //
+    // Unix 那一层用 /etc、/usr 之类的一级目录表达"这不是应用该动的地方"，Windows
+    // 上对应的类比就是"整个盘的根"。少了这条，`CC_SWITCH_CONFIG_DIR=C:\` 会被当合法
+    // 目录放过去，直到 `Database::init()` 往盘根写 `cc-switch.db` 才以 IO 权限错误
+    // 失败——报错既不提环境变量、也看不出是配置目录不合法。盘根以下的一级子目录
+    // （`C:\Program Files\...`）仍然合法，便携安装不受影响。
     #[cfg(windows)]
     {
-        // Should do some more verifications here
-        return false;
+        use std::path::Component;
+
+        let mut components = path.components().peekable();
+        // C: / \\?\C: 这类盘符前缀，以及可选的 RootDir 之后不能再有别的层级。
+        if matches!(components.peek(), Some(Component::Prefix(_))) {
+            components.next();
+        }
+        if matches!(components.peek(), Some(Component::RootDir)) {
+            components.next();
+        }
+        // Windows 上这个 cfg 块本身就是函数尾值（no_windows 那侧是 `false`），
+        // 所以这里不需要 return。
+        components.next().is_none()
     }
 
+    #[cfg(not(windows))]
     false
 }
 
@@ -781,15 +799,19 @@ mod tests {
 
     struct SettingsGuard {
         original: crate::settings::AppSettings,
+        // 必须后声明：Drop 顺序是逆序，`_sandbox` 在 `original` 被写回磁盘之后
+        // 才会把 `CC_SWITCH_CONFIG_DIR` 恢复成真实路径。
+        _sandbox: crate::test_support::ConfigDirSandbox,
     }
 
     impl SettingsGuard {
         fn with_claude_config_dir(dir: Option<&str>) -> Self {
+            let _sandbox = crate::test_support::ConfigDirSandbox::new();
             let original = crate::settings::get_settings();
             let mut settings = original.clone();
             settings.claude_config_dir = dir.map(str::to_string);
             crate::settings::update_settings(settings).unwrap();
-            Self { original }
+            Self { original, _sandbox }
         }
     }
 
@@ -966,6 +988,7 @@ mod tests {
         assert!(validate_config_dir().is_err());
     }
 
+    #[cfg(unix)]
     #[test]
     fn validate_config_dir_rejects_etc() {
         let _guard = lock_test_home_and_settings();
@@ -973,6 +996,7 @@ mod tests {
         assert!(validate_config_dir().is_err());
     }
 
+    #[cfg(unix)]
     #[test]
     fn validate_config_dir_rejects_usr() {
         let _guard = lock_test_home_and_settings();
@@ -980,11 +1004,45 @@ mod tests {
         assert!(validate_config_dir().is_err());
     }
 
+    #[cfg(unix)]
     #[test]
     fn validate_config_dir_rejects_tmp() {
         let _guard = lock_test_home_and_settings();
         let _env = ConfigDirEnvGuard::new("CC_SWITCH_CONFIG_DIR", Some("/tmp"));
         assert!(validate_config_dir().is_err());
+    }
+
+    /// 盘符根目录在 Windows 上必须被判为系统目录。
+    ///
+    /// `is_system_dir()` 的 Unix 那一层列了 `/etc`、`/usr`，Windows 上对应的类比
+    /// 就是"整个盘的根"。少了这条，`CC_SWITCH_CONFIG_DIR=C:\` 会被一路放过去，直到
+    /// `Database::init()` 往盘根写 `cc-switch.db` 才以 IO 权限错误失败（端到端那条
+    /// 路径由 `database::tests::init_rejects_unsafe_config_dir` 覆盖）。这里补的是
+    /// 判定本身：带反斜杠的、只剩盘符的、带 verbatim 前缀的都要拒，而盘根下面的
+    /// 子目录仍然合法——装在 `C:\Program Files\cc-switch` 的便携安装不能受牵连。
+    #[cfg(windows)]
+    #[test]
+    fn validate_config_dir_rejects_drive_roots_but_allows_subdirectories() {
+        let _guard = lock_test_home_and_settings();
+
+        for drive_root in [r"C:\", "C:", r"\\?\C:\"] {
+            let _env = ConfigDirEnvGuard::new("CC_SWITCH_CONFIG_DIR", Some(drive_root));
+            assert!(
+                validate_config_dir().is_err(),
+                "{drive_root} is a drive root, not an application config dir"
+            );
+        }
+
+        let temp = tempfile::tempdir().expect("create temp dir");
+        let config_dir = temp.path().join(".cc-switch");
+        let _env = ConfigDirEnvGuard::new(
+            "CC_SWITCH_CONFIG_DIR",
+            Some(config_dir.to_str().expect("utf8 temp path")),
+        );
+        assert!(
+            validate_config_dir().is_ok(),
+            "a subdirectory below the drive root must stay valid"
+        );
     }
 
     #[test]

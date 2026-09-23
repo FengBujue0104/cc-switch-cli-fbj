@@ -18,12 +18,7 @@ fn settings_section(item: SettingsItem) -> SettingsSection {
         | SettingsItem::Theme
         | SettingsItem::Icons
         | SettingsItem::PreferredEditor => SettingsSection::General,
-        SettingsItem::VisibleAppsMode
-        | SettingsItem::VisibleApps
-        | SettingsItem::SkillsStorageLocation
-        | SettingsItem::SkillsSyncMethod
-        | SettingsItem::OpenClawConfigDir
-        | SettingsItem::PiConfigDir => SettingsSection::Applications,
+        SettingsItem::PiConfigDir => SettingsSection::Applications,
         SettingsItem::SkipClaudeOnboarding
         | SettingsItem::ClaudePluginIntegration
         | SettingsItem::PreserveCodexOfficialAuth
@@ -127,19 +122,6 @@ pub(super) fn local_proxy_settings_item_label(item: &LocalProxySettingsItem) -> 
 
 pub(super) fn ordered_visible_app_types(apps: &crate::settings::VisibleApps) -> Vec<AppType> {
     apps.ordered_enabled()
-}
-
-fn visible_apps_summary(apps: &crate::settings::VisibleApps) -> String {
-    let labels = ordered_visible_app_types(apps)
-        .into_iter()
-        .map(|app_type| app_type.as_str().to_string())
-        .collect::<Vec<_>>();
-
-    if labels.is_empty() {
-        texts::none().to_string()
-    } else {
-        labels.join(", ")
-    }
 }
 
 pub(super) fn render_config(
@@ -3431,9 +3413,6 @@ pub(super) fn render_settings(
     theme: &super::theme::Theme,
 ) {
     let language = crate::cli::i18n::current_language();
-    let visible_apps = crate::settings::get_visible_apps();
-    let visible_apps_mode = crate::settings::get_visible_apps_settings().mode;
-    let openclaw_config_dir = crate::settings::get_settings().openclaw_config_dir;
     let pi_config_dir = crate::settings::get_settings().pi_config_dir;
     let skip_claude_onboarding = crate::settings::get_skip_claude_onboarding();
     let claude_plugin_integration = crate::settings::get_enable_claude_plugin_integration();
@@ -3467,38 +3446,6 @@ pub(super) fn render_settings(
                 preferred_editor
                     .clone()
                     .unwrap_or_else(|| texts::tui_settings_preferred_editor_not_set().to_string()),
-            ),
-            super::app::SettingsItem::VisibleAppsMode => (
-                texts::tui_settings_visible_apps_mode_label().to_string(),
-                match visible_apps_mode {
-                    crate::settings::VisibleAppsMode::Auto => {
-                        texts::tui_settings_visible_apps_mode_auto().to_string()
-                    }
-                    crate::settings::VisibleAppsMode::Manual => {
-                        texts::tui_settings_visible_apps_mode_manual().to_string()
-                    }
-                },
-            ),
-            super::app::SettingsItem::VisibleApps => (
-                texts::tui_settings_visible_apps_label().to_string(),
-                visible_apps_summary(&visible_apps),
-            ),
-            super::app::SettingsItem::SkillsStorageLocation => (
-                texts::tui_settings_skills_storage_location_label().to_string(),
-                texts::tui_skills_storage_location_name(
-                    crate::settings::get_skill_storage_location(),
-                )
-                .to_string(),
-            ),
-            super::app::SettingsItem::SkillsSyncMethod => (
-                texts::tui_settings_skills_sync_method_label().to_string(),
-                texts::tui_skills_sync_method_name(data.skills.sync_method).to_string(),
-            ),
-            super::app::SettingsItem::OpenClawConfigDir => (
-                texts::tui_settings_openclaw_config_dir_label().to_string(),
-                openclaw_config_dir.clone().unwrap_or_else(|| {
-                    texts::tui_settings_openclaw_config_dir_default_value().to_string()
-                }),
             ),
             super::app::SettingsItem::PiConfigDir => (
                 texts::tui_settings_pi_config_dir_label().to_string(),
@@ -4286,4 +4233,72 @@ pub(super) fn render_settings_outbound_proxy(
     let mut state = TableState::default();
     state.select(Some(app.settings_outbound_proxy_idx));
     frame.render_stateful_widget(table, inset_left(chunks[1], CONTENT_INSET_LEFT), &mut state);
+}
+
+#[cfg(test)]
+mod openclaw_workspace_body_heights_tests {
+    use super::openclaw_workspace_body_heights;
+
+    /// 高度分配的所有不变量：不溢出可用高度、任何区块都不超过它"完整"时的高度。
+    ///
+    /// 只有一行时摘要是可以拿 0 的——优先的那一侧要拿到最后一行，这是有意的取舍。
+    fn assert_invariant(files: u16, daily: u16, got: (u16, u16, u16), available: u16) {
+        let (summary_height, files_height, daily_height) = got;
+        let total = u32::from(summary_height) + u32::from(files_height) + u32::from(daily_height);
+        assert!(
+            total <= u32::from(available),
+            "heights {got:?} overflow available {available}"
+        );
+        assert!(
+            files_height <= files,
+            "files over-allocated: {got:?} > {files}"
+        );
+        assert!(
+            daily_height <= daily,
+            "daily over-allocated: {got:?} > {daily}"
+        );
+    }
+
+    #[test]
+    fn zero_height_stays_empty() {
+        assert_eq!(
+            openclaw_workspace_body_heights(0, 4, 5, 6, false),
+            (0, 0, 0)
+        );
+        assert_eq!(openclaw_workspace_body_heights(0, 4, 5, 6, true), (0, 0, 0));
+    }
+
+    #[test]
+    fn short_terminals_keep_the_prioritized_section_and_never_overflow() {
+        for available in 0..=24u16 {
+            for prioritize_daily in [false, true] {
+                let got = openclaw_workspace_body_heights(available, 4, 5, 6, prioritize_daily);
+                assert_invariant(5, 6, got, available);
+
+                // 只剩一格时，优先的那一侧必须拿到它，而不是两边都归零。
+                if available == 1 {
+                    let (_, files_height, daily_height) = got;
+                    assert_eq!(files_height + daily_height, 1, "{got:?}");
+                    assert_eq!(
+                        (daily_height == 1),
+                        prioritize_daily,
+                        "the prioritized section must win the last row: {got:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn roomy_terminals_hand_every_section_its_full_height() {
+        assert_eq!(
+            openclaw_workspace_body_heights(20, 4, 5, 6, false),
+            (4, 5, 6)
+        );
+        assert_eq!(
+            openclaw_workspace_body_heights(20, 4, 5, 6, true),
+            (4, 5, 6),
+            "prioritizing one section must not shrink it when everything already fits"
+        );
+    }
 }

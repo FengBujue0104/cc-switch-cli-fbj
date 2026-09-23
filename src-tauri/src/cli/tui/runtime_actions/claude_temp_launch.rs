@@ -218,7 +218,7 @@ mod tests {
             &mut fixture.ctx(),
             "candidate".to_string(),
             temp_dir.path(),
-            ensure_temp_launch_supported,
+            || Ok(()),
             |id, temp_dir| {
                 let provider = Provider::with_id(
                     id.to_string(),
@@ -278,7 +278,7 @@ mod tests {
             &mut fixture.ctx(),
             "candidate".to_string(),
             temp_dir.path(),
-            ensure_temp_launch_supported,
+            || Ok(()),
             |id, temp_dir| {
                 let provider = Provider::with_id(
                     id.to_string(),
@@ -430,7 +430,7 @@ mod tests {
             &mut fixture.ctx(),
             "candidate".to_string(),
             temp_dir.path(),
-            ensure_temp_launch_supported,
+            || Ok(()),
             |id, temp_dir| {
                 let state = load_state()?;
                 let provider = ProviderService::get_provider(&state, AppType::Claude, id)?;
@@ -457,12 +457,16 @@ mod tests {
         )
         .expect("launch failure should stay in the TUI");
 
+        let captured_settings = captured_settings.into_inner();
+        assert!(
+            captured_settings.is_some(),
+            "handoff should capture written settings, toast: {:?}",
+            fixture.app.toast
+        );
         assert_eq!(
-            captured_settings
-                .into_inner()
-                .expect("capture written settings"),
+            captured_settings.unwrap(),
             expected,
-            "TUI temp launch should use the realtime state's effective snapshot"
+            "TUI temp launch should use the realtime state effective snapshot"
         );
     }
 }

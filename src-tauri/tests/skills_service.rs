@@ -299,7 +299,63 @@ fn toggle_app_openclaw_skips_live_skill_side_effects() {
     );
 }
 
+/// `app_supports_skills` 是五个 skill 写入口共用的门槛，必须对三个已删 harness
+/// 全部恒为 `false`。上面那个 OpenClaw 用例只覆盖了一个；这个把 Gemini /
+/// OpenCode / OpenClaw 三个一起钉住——`sync_to_app_dir` 动手前会
+/// `create_dir_all`，门槛漏一个就会在用户真实的 `~/.gemini/skills` 或
+/// `~/.config/opencode/skills` 下造出目录。
 #[test]
+fn toggle_app_removed_harnesses_never_creates_live_skill_dirs() {
+    let _guard = lock_test_mutex();
+    reset_test_fs();
+    let home = ensure_test_home();
+
+    let claude_skill_dir = home.join(".claude").join("skills").join("hello-skill");
+    write_skill_md(&claude_skill_dir, "Hello Skill", "A test skill");
+    let imported =
+        SkillService::import_from_app_dirs(vec!["hello-skill".to_string()]).expect("import skill");
+    assert_eq!(
+        imported.len(),
+        1,
+        "skill should be imported before toggling"
+    );
+
+    for (app_type, live_skills_dir) in [
+        (AppType::Gemini, home.join(".gemini").join("skills")),
+        (
+            AppType::OpenCode,
+            home.join(".config").join("opencode").join("skills"),
+        ),
+        (AppType::OpenClaw, home.join(".openclaw").join("skills")),
+    ] {
+        std::fs::create_dir_all(&live_skills_dir).expect("pre-create the removed harness live dir");
+
+        SkillService::toggle_app("hello-skill", &app_type, true)
+            .unwrap_or_else(|err| panic!("{app_type:?} toggle should not fail: {err}"));
+
+        assert_eq!(
+            std::fs::read_dir(&live_skills_dir)
+                .expect("read the removed harness skills dir")
+                .count(),
+            0,
+            "{app_type:?} is not shipped in this build: toggle must not write into {}",
+            live_skills_dir.display()
+        );
+    }
+
+    let installed = SkillService::list_installed().expect("list installed skills");
+    let skill = installed
+        .into_iter()
+        .find(|skill| skill.directory == "hello-skill")
+        .expect("hello-skill should still be installed");
+    assert!(
+        skill.apps.claude,
+        "existing supported app state should be preserved"
+    );
+}
+
+#[test]
+#[ignore = "OpenClaw harness removed from this build"]
 fn scan_unmanaged_includes_openclaw_skill_source() {
     let _guard = lock_test_mutex();
     reset_test_fs();
@@ -324,6 +380,7 @@ fn scan_unmanaged_includes_openclaw_skill_source() {
 }
 
 #[test]
+#[ignore = "OpenClaw harness removed from this build"]
 fn import_from_app_dirs_imports_openclaw_source_without_openclaw_target() {
     let _guard = lock_test_mutex();
     reset_test_fs();
@@ -356,6 +413,7 @@ fn import_from_app_dirs_imports_openclaw_source_without_openclaw_target() {
 }
 
 #[test]
+#[ignore = "OpenClaw harness removed from this build"]
 fn import_from_apps_applies_explicit_target_apps_for_openclaw_source() {
     let _guard = lock_test_mutex();
     reset_test_fs();
@@ -763,9 +821,12 @@ fn storage_migration_retry_accepts_changes_in_the_current_target() {
     let new_skill = home.join(".agents").join("skills").join("managed");
     write_skill_md(&new_skill, "Managed", "Updated in current storage");
 
-    let imported = home.join(".gemini").join("skills").join("added-later");
+    // 这里只要一个"后来才加进来"的 Skill 源；上游写在 ~/.gemini 下，但本构建已把
+    // Gemini 从 skill_source_apps() 里去掉，import_from_apps 会找不到源而返回 0，
+    // 所以改用仍然保留的 Claude 目录，被钉住的行为（重试接受当前 target 的改动）不变。
+    let imported = home.join(".claude").join("skills").join("added-later");
     write_skill_md(&imported, "Added Later", "New managed Skill");
-    register_managed_skill("added-later", SkillApps::only(&AppType::Gemini));
+    register_managed_skill("added-later", SkillApps::only(&AppType::Claude));
     remove_test_path(&deployed);
 
     let retried =

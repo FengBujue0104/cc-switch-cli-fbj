@@ -216,12 +216,10 @@ pub fn provider_add_template_choices(app_type: &AppType) -> Vec<ProviderAddTempl
     };
 
     if matches!(app_type, AppType::Claude | AppType::Codex) {
-        choices.extend([
-            ProviderAddTemplateChoice {
-                template: ProviderAddTemplate::Deepseek,
-                label: "DeepSeek",
-            },
-        ]);
+        choices.extend([ProviderAddTemplateChoice {
+            template: ProviderAddTemplate::Deepseek,
+            label: "DeepSeek",
+        }]);
     }
 
     choices
@@ -1808,14 +1806,18 @@ requires_openai_auth = true
             build_provider_template_seed(&AppType::Codex, ProviderAddTemplate::Packycode, &[])
                 .is_err()
         );
-        assert!(
-            build_provider_template_seed(&AppType::OpenCode, ProviderAddTemplate::Aicodemirror, &[])
-                .is_err()
-        );
-        assert!(
-            build_provider_template_seed(&AppType::OpenClaw, ProviderAddTemplate::Cubence, &[])
-                .is_err()
-        );
+        assert!(build_provider_template_seed(
+            &AppType::OpenCode,
+            ProviderAddTemplate::Aicodemirror,
+            &[]
+        )
+        .is_err());
+        assert!(build_provider_template_seed(
+            &AppType::OpenClaw,
+            ProviderAddTemplate::Cubence,
+            &[]
+        )
+        .is_err());
     }
 
     #[test]

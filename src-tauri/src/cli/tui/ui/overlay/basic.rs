@@ -51,14 +51,6 @@ pub(super) fn render_confirm_overlay(
             ("Esc", texts::tui_key_cancel()),
         ],
         ConfirmAction::ProviderApiFormatProxyNotice => &[("Enter", texts::tui_key_close())],
-        ConfirmAction::VisibleAppsAutoDetection => &[
-            ("Enter", texts::tui_key_use_auto()),
-            ("Esc", texts::tui_key_keep_current()),
-        ],
-        ConfirmAction::VisibleAppsSwitchToManual { .. } => &[
-            ("Enter", texts::tui_key_switch_to_manual()),
-            ("Esc", texts::tui_key_cancel()),
-        ],
         ConfirmAction::CommonConfigNotice | ConfirmAction::UsageQueryNotice => {
             &[("Enter", texts::tui_key_close())]
         }
@@ -298,7 +290,12 @@ pub(super) fn render_common_snippet_picker_overlay(
     theme: &theme::Theme,
     selected: usize,
 ) {
-    let labels = ["Claude", "Codex", "Gemini", "OpenCode"];
+    // 与 `snippet_picker_apps()` 同源：写死一份标签就是给已删 harness 留一个
+    // 用户还能选中的入口。
+    let labels = crate::cli::tui::app::snippet_picker_apps()
+        .into_iter()
+        .map(|app| app.as_str().to_string())
+        .collect::<Vec<_>>();
     let body = overlay_frame(
         frame,
         content_area,
