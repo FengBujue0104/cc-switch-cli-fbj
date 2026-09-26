@@ -21,7 +21,7 @@ if [[ ! -x "${GH}" ]] && ! command -v "${GH}" >/dev/null 2>&1; then
   exit 1
 fi
 
-WIN_CARGO="${WIN_CARGO:-/mnt/c/Users/zcy/.cargo/bin/cargo.exe}"
+WIN_CARGO="${WIN_CARGO:-}"
 need_windows="${PUBLISH_WINDOWS:-1}"
 
 OUT="${ROOT}/dist-release"
@@ -40,16 +40,20 @@ chmod 755 "${OUT}/linux/cc-switch"
 tar -czf "${OUT}/cc-switch-cli-${TAG}-linux-x64.tar.gz" -C "${OUT}/linux" cc-switch
 
 if [[ "${need_windows}" == "1" ]]; then
-  if command -v cargo.exe >/dev/null 2>&1; then
+  if [[ -z "${WIN_CARGO}" ]] && command -v cargo.exe >/dev/null 2>&1; then
     WIN_CARGO="$(command -v cargo.exe)"
-  elif [[ ! -x "${WIN_CARGO}" ]]; then
+  fi
+  if [[ -z "${WIN_CARGO}" ]]; then
+    WIN_CARGO="cargo.exe"
+  fi
+  if ! command -v "${WIN_CARGO}" >/dev/null 2>&1 && [[ ! -x "${WIN_CARGO}" ]]; then
     echo "Windows cargo not found; set WIN_CARGO or PUBLISH_WINDOWS=0." >&2
     exit 1
   fi
   echo "==> Windows release binary"
   (
     cd "${ROOT}/src-tauri"
-    RUSTUP_TOOLCHAIN=stable "${WIN_CARGO}" build --release --target x86_64-pc-windows-msvc
+    RUSTUP_TOOLCHAIN=1.91.1 "${WIN_CARGO}" build --release --target x86_64-pc-windows-msvc
   )
   WIN_EXE="${ROOT}/src-tauri/target/x86_64-pc-windows-msvc/release/cc-switch.exe"
   if [[ ! -f "${WIN_EXE}" ]]; then

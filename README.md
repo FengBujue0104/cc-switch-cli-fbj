@@ -24,7 +24,7 @@
 
 - **harness 只留四个。** `-a/--app` 仅接受 `claude`、`codex`、`hermes`、`pi`，`gemini`、`opencode`、`openclaw` 在命令入口就被拒绝（库内部仍保留旧 id 的解析，否则旧数据读不出来）。供应商切换 / live 同步的路径一律不再读写已删 harness 的本地配置文件（`should_sync_live` 恒为 `false`），换回上游或其他分支仍可继续使用。还会碰已删 harness 本地文件的只剩两处：隐藏命令 `cc-switch config openclaw`（显式调用时写 `~/.openclaw/` 下的配置和工作区文件，不接入供应商切换），以及启动时一次性的旧 common-config 凭据清理（只从 `~/.gemini/.env` 删掉泄漏的密钥条目，有标记、不重跑）。
 - **不会再自己复活已删 harness。** 以前「自动检测可用 harness」会把已删的 harness 又塞回切换标签栏，这条路径已禁用；`settings visible-apps` 也降级为只读，无法把已删 harness 加回来。
-- **CLI 命令收敛。** 可见的顶层命令为 `auth`、`provider`、`use`、`config`、`proxy`、`settings`、`start`、`daemon`、`env`、`update`、`interactive`、`completions`（`start` / `daemon` 仅 Unix；`proxy` 是默认启用的 cargo feature，`--no-default-features --features cli` 可编出不带代理命令的版本）；`skills`、`mcp`、`sessions`、`usage` 等入口已移除。
+- **CLI 命令收敛。** 可见的顶层命令为 `auth`、`provider`、`use`、`config`、`proxy`、`settings`、`start`、`daemon`、`env`、`update`、`interactive`、`completions`（`start` / `daemon` 仅 Unix；`proxy` 是默认启用的 cargo feature，`--no-default-features --features cli` 可编出不带代理命令的版本）；`skills`、`mcp`、`sessions`、`usage` 等入口已移除。隐藏子命令仍有 `config openclaw`、`config webdav`、`config s3`（后两者做备份同步，不写已删 harness 的 live 文件）。
 - **TUI 侧栏精简。** 任意应用下都只有「首页 / 供应商 / 设置 / 退出」四项。
 - **保留的东西没动。** 官方 Codex OAuth、统一的 Codex 会话历史（`model_provider = custom`）、可选的本地代理（`cc-switch proxy enable`，负责 API 格式转换）都保持原样。
 

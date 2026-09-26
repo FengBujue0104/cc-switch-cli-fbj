@@ -3172,14 +3172,10 @@ impl ProviderService {
         // `~/.openclaw`。门槛放在这里，防线就不依赖每个调用方自觉，也和
         // `src/mcp.rs`、`ConfigService::sync_gemini_live` 的写法保持一致。
         //
-        // Gemini 是唯一的例外，不能在这里拦：它的臂在门槛后面返回的是
-        // `PreparedLiveWrite::GeminiSecurityFlag`，那一路只更新 cc-switch 自己的
-        // `settings.json`（`ensure_gemini_app_security_flag`），一个字节都不碰
-        // `~/.gemini`。在这里一并挡掉会让切到 Google Official / PackyCode 供应商后
-        // `security.auth.selectedType` 停在旧值——用户下次启动 Gemini CLI 会拿到
-        // 错误的鉴权方式。所以 Gemini 放过去，由 `prepare_gemini_live_write` 里那道
-        // 门槛自己给出非写入的结果。
-        if !crate::sync_policy::should_sync_live(app_type) && !matches!(app_type, AppType::Gemini) {
+        // Retired harnesses (including Gemini) are a hard Noop here. This fork
+        // does not switch Gemini providers, so the leftover security-flag write
+        // into settings.json is a dead path.
+        if !crate::sync_policy::should_sync_live(app_type) {
             log::debug!("live snapshot skipped: {app_type:?} is not part of this build");
             return Ok(PreparedLiveWrite::Noop);
         }

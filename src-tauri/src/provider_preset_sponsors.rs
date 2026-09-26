@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct SponsorProviderPreset {
     pub(crate) id: &'static str,
@@ -187,57 +189,7 @@ pub(crate) const FENNO: SponsorProviderPreset = SponsorProviderPreset {
     hermes_base_url: "https://api.fenno.ai/v1",
 };
 
-pub(crate) const SPONSOR_PROVIDER_PRESETS: [SponsorProviderPreset; 10] = [
-    AI_CODE_MIRROR,
-    CLAUDE_API,
-    PATEWAY_AI,
-    PACKY_CODE,
-    CUBENCE,
-    OPENMODEL,
-    RUN_API,
-    DDS,
-    QINIU,
-    FENNO,
-];
-
-#[allow(dead_code)]
-const CLAUDE_SPONSOR_PRESETS: [SponsorProviderPreset; 10] = [
-    AI_CODE_MIRROR,
-    CLAUDE_API,
-    PATEWAY_AI,
-    CUBENCE,
-    OPENMODEL,
-    RUN_API,
-    QINIU,
-    FENNO,
-    PACKY_CODE,
-    DDS,
-];
-#[allow(dead_code)]
-const CODEX_SPONSOR_PRESETS: [SponsorProviderPreset; 9] = [
-    AI_CODE_MIRROR,
-    PATEWAY_AI,
-    CUBENCE,
-    OPENMODEL,
-    RUN_API,
-    QINIU,
-    FENNO,
-    PACKY_CODE,
-    DDS,
-];
-#[allow(dead_code)]
-const GEMINI_SPONSOR_PRESETS: [SponsorProviderPreset; 5] =
-    [AI_CODE_MIRROR, CUBENCE, OPENMODEL, QINIU, PACKY_CODE];
-#[allow(dead_code)]
-const ADDITIVE_SPONSOR_PRESETS: [SponsorProviderPreset; 7] = [
-    AI_CODE_MIRROR,
-    CUBENCE,
-    OPENMODEL,
-    RUN_API,
-    QINIU,
-    FENNO,
-    PACKY_CODE,
-];
+pub(crate) const SPONSOR_PROVIDER_PRESETS: [SponsorProviderPreset; 0] = [];
 
 pub(crate) fn sponsor_provider_preset(id: &str) -> Option<SponsorProviderPreset> {
     SPONSOR_PROVIDER_PRESETS
@@ -331,6 +283,12 @@ mod tests {
         assert!(PATEWAY_AI.opencode_base_url.is_empty());
         assert!(PATEWAY_AI.hermes_base_url.is_empty());
         assert!(PATEWAY_AI.openclaw_base_url.is_empty());
+    }
+
+    #[test]
+    fn sponsor_preset_registry_is_empty() {
+        assert!(SPONSOR_PROVIDER_PRESETS.is_empty());
+        assert!(sponsor_provider_preset("packycode").is_none());
     }
 
     #[test]
