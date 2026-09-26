@@ -949,11 +949,59 @@ fn provider_duplicate_missing_source_returns_error_without_creating_provider() {
 
 #[test]
 #[serial]
-fn provider_live_config_cli_import_live_imports_additive_app_providers() {
+fn provider_live_config_cli_import_live_imports_kept_additive_app_providers() {
     let _guard = lock_test_mutex();
     reset_test_fs();
     let home = ensure_test_home();
-    let (opencode_dir, hermes_dir, openclaw_dir) = configure_live_dirs(home);
+    let (_opencode_dir, hermes_dir, _openclaw_dir) = configure_live_dirs(home);
+
+    fs::write(
+        hermes_dir.join("config.yaml"),
+        r#"
+custom_providers:
+  - name: hermes-live
+    base_url: https://hermes.example/v1
+    api_key: sk-hermes
+    models:
+      hermes-model:
+        context_length: 200000
+model: {}
+"#,
+    )
+    .expect("write hermes live config");
+
+    let state = state_from_config(MultiAppConfig::default());
+    state.save().expect("persist empty provider state");
+    drop(state);
+
+    provider_command(
+        cc_switch_lib::cli::commands::provider::ProviderCommand::ImportLive,
+        AppType::Hermes,
+    );
+
+    let refreshed = cc_switch_lib::AppState::try_new().expect("reload provider state");
+    let config = refreshed.config.read().expect("lock provider state");
+    let provider = config
+        .get_manager(&AppType::Hermes)
+        .and_then(|manager| manager.providers.get("hermes-live"))
+        .expect("expected imported hermes-live provider");
+    assert_eq!(
+        provider
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.live_config_managed),
+        Some(true),
+        "hermes-live should be marked live-config managed"
+    );
+}
+
+#[test]
+#[serial]
+fn provider_live_config_cli_import_live_rejects_removed_harnesses() {
+    let _guard = lock_test_mutex();
+    reset_test_fs();
+    let home = ensure_test_home();
+    let (opencode_dir, _hermes_dir, openclaw_dir) = configure_live_dirs(home);
 
     fs::write(
         opencode_dir.join("opencode.json"),
@@ -977,20 +1025,6 @@ fn provider_live_config_cli_import_live_imports_additive_app_providers() {
     )
     .expect("write opencode live config");
     fs::write(
-        hermes_dir.join("config.yaml"),
-        r#"
-custom_providers:
-  - name: hermes-live
-    base_url: https://hermes.example/v1
-    api_key: sk-hermes
-    models:
-      hermes-model:
-        context_length: 200000
-model: {}
-"#,
-    )
-    .expect("write hermes live config");
-    fs::write(
         openclaw_dir.join("openclaw.json"),
         r#"
 {
@@ -1012,37 +1046,38 @@ model: {}
     state.save().expect("persist empty provider state");
     drop(state);
 
-    provider_command(
-        cc_switch_lib::cli::commands::provider::ProviderCommand::ImportLive,
-        AppType::OpenCode,
-    );
-    provider_command(
-        cc_switch_lib::cli::commands::provider::ProviderCommand::ImportLive,
-        AppType::Hermes,
-    );
-    provider_command(
-        cc_switch_lib::cli::commands::provider::ProviderCommand::ImportLive,
-        AppType::OpenClaw,
-    );
+    for app in [AppType::Gemini, AppType::OpenCode, AppType::OpenClaw] {
+        let err = provider_command_result(
+            cc_switch_lib::cli::commands::provider::ProviderCommand::ImportLive,
+            app.clone(),
+        )
+        .expect_err("import-live for a removed harness must fail");
+        let rendered = err.to_string();
+        assert!(
+            rendered.contains("Unsupported app id"),
+            "removed harness {} should be rejected as unsupported: {rendered}",
+            app.as_str()
+        );
+        assert!(
+            rendered.contains("claude, codex, hermes, pi"),
+            "rejection must list kept apps: {rendered}"
+        );
+    }
 
     let refreshed = cc_switch_lib::AppState::try_new().expect("reload provider state");
     let config = refreshed.config.read().expect("lock provider state");
-    for (app_type, id) in [
+    for (app, id) in [
         (AppType::OpenCode, "open-live"),
-        (AppType::Hermes, "hermes-live"),
         (AppType::OpenClaw, "claw-live"),
+        (AppType::Gemini, "open-live"),
     ] {
-        let provider = config
-            .get_manager(&app_type)
-            .and_then(|manager| manager.providers.get(id))
-            .unwrap_or_else(|| panic!("expected imported {id} provider"));
-        assert_eq!(
-            provider
-                .meta
-                .as_ref()
-                .and_then(|meta| meta.live_config_managed),
-            Some(true),
-            "{id} should be marked live-config managed"
+        assert!(
+            config
+                .get_manager(&app)
+                .and_then(|manager| manager.providers.get(id))
+                .is_none(),
+            "removed harness {} must not persist imported id {id}",
+            app.as_str()
         );
     }
 }
@@ -1236,6 +1271,7 @@ fn provider_live_config_cli_openclaw_remove_rejects_default_provider() {
 
 #[test]
 #[serial]
+#[ignore = "OpenClaw harness removed from this build: provider commands no longer accept openclaw"]
 fn provider_live_config_cli_openclaw_set_default_uses_live_order_and_preserves_extra() {
     let _guard = lock_test_mutex();
     reset_test_fs();

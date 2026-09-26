@@ -1,7 +1,7 @@
 use clap::{Subcommand, ValueEnum};
 use std::{collections::HashSet, path::PathBuf};
 
-use super::{provider_inspect, provider_usage_query};
+use super::{app_targets, provider_inspect, provider_usage_query};
 use crate::app_config::AppType;
 use crate::claude_model_config::{ClaudeModelRole, CLAUDE_DEFAULT_MODEL_ENV_KEY};
 use crate::cli::commands::provider_input::{
@@ -840,6 +840,7 @@ pub enum ProviderCommand {
 
 pub fn execute(cmd: ProviderCommand, app: Option<AppType>) -> Result<(), AppError> {
     let app_type = app.unwrap_or(AppType::Claude);
+    app_targets::ensure_kept_app(&app_type)?;
 
     match cmd {
         ProviderCommand::List => provider_inspect::list_providers(app_type),

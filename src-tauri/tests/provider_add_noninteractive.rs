@@ -84,6 +84,19 @@ fn prepare_empty_state() {
     drop(state);
 }
 
+fn assert_removed_app_rejected(err: &cc_switch_lib::AppError, app: &AppType) {
+    let rendered = err.to_string();
+    assert!(
+        rendered.contains("Unsupported app id"),
+        "removed harness {} should be rejected as unsupported: {rendered}",
+        app.as_str()
+    );
+    assert!(
+        rendered.contains("claude, codex, hermes, pi"),
+        "rejection must list kept apps: {rendered}"
+    );
+}
+
 fn saved_provider(app_type: AppType, id: &str) -> Provider {
     let refreshed = cc_switch_lib::AppState::try_new().expect("reload provider state");
     let config = refreshed.config.read().expect("lock provider state");
@@ -102,6 +115,37 @@ fn env_str<'a>(provider: &'a Provider, key: &str) -> Option<&'a str> {
         .get("env")
         .and_then(|env| env.get(key))
         .and_then(|value| value.as_str())
+}
+
+#[test]
+#[serial]
+fn add_removed_harness_is_rejected_without_persisting() {
+    let _guard = lock_test_mutex();
+    prepare_empty_state();
+
+    for app in [AppType::Gemini, AppType::OpenCode, AppType::OpenClaw] {
+        let err = run_add(
+            Some("Removed App Provider"),
+            app.clone(),
+            AddOpts {
+                base_url: Some("https://api.example.com".to_string()),
+                api_key: Some("sk-removed".to_string()),
+                config: Some(r#"{"ok":true}"#.to_string()),
+                ..Default::default()
+            },
+        )
+        .expect_err("provider add for a removed harness must fail");
+        assert_removed_app_rejected(&err, &app);
+
+        let refreshed = cc_switch_lib::AppState::try_new().expect("reload provider state");
+        let config = refreshed.config.read().expect("lock provider state");
+        let manager = config.get_manager(&app);
+        assert!(
+            manager.map(|m| m.providers.is_empty()).unwrap_or(true),
+            "removed harness {} must not persist a provider after a rejected add",
+            app.as_str()
+        );
+    }
 }
 
 #[test]
@@ -554,6 +598,7 @@ fn add_claude_role_flags_reject_non_claude_apps() {
 
 #[test]
 #[serial]
+#[ignore = "Gemini harness removed from this build: provider add no longer accepts gemini"]
 fn add_gemini_uses_oauth_without_key_and_api_key_with_key() {
     let _guard = lock_test_mutex();
     prepare_empty_state();
@@ -583,6 +628,7 @@ fn add_gemini_uses_oauth_without_key_and_api_key_with_key() {
 
 #[test]
 #[serial]
+#[ignore = "OpenCode harness removed from this build: provider add no longer accepts opencode"]
 fn add_additive_app_requires_raw_config() {
     let _guard = lock_test_mutex();
     prepare_empty_state();

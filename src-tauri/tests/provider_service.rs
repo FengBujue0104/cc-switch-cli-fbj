@@ -1372,6 +1372,7 @@ fn switch_gemini_when_uninitialized_skips_live_sync_and_succeeds() {
 }
 
 #[test]
+#[ignore = "Gemini harness removed from this build: proxy/security flags no longer accept a gemini app id"]
 fn switch_packycode_gemini_updates_security_selected_type() {
     let _guard = lock_test_mutex();
     reset_test_fs();
@@ -1424,6 +1425,7 @@ fn switch_packycode_gemini_updates_security_selected_type() {
 }
 
 #[test]
+#[ignore = "Gemini harness removed from this build: proxy/security flags no longer accept a gemini app id"]
 fn packycode_partner_meta_triggers_security_flag_even_without_keywords() {
     let _guard = lock_test_mutex();
     reset_test_fs();
@@ -1478,6 +1480,7 @@ fn packycode_partner_meta_triggers_security_flag_even_without_keywords() {
 }
 
 #[test]
+#[ignore = "Gemini harness removed from this build: proxy/security flags no longer accept a gemini app id"]
 fn switch_google_official_gemini_sets_oauth_security_without_touching_live_dir() {
     let _guard = lock_test_mutex();
     reset_test_fs();

@@ -4578,6 +4578,7 @@ base_url = "https://current.example.com/v1"
 
     #[test]
     #[serial]
+    #[ignore = "OpenCode harness removed from this build: live-only OpenCode ids are no longer imported"]
     fn existing_provider_ids_includes_opencode_live_only_ids() {
         let _guard = lock_test_home_and_settings();
         let temp = tempdir().expect("create tempdir");
@@ -5124,13 +5125,10 @@ base_url = "https://current.example.com/v1"
             docs: None,
             tags: vec![],
         };
-        state
-            .db
-            .save_mcp_server(&server)
-            .expect("seed mcp server");
+        state.db.save_mcp_server(&server).expect("seed mcp server");
 
-        let snapshot = UiData::load_fast_snapshot_from_state(&state, &AppType::Claude)
-            .expect("load snapshot");
+        let snapshot =
+            UiData::load_fast_snapshot_from_state(&state, &AppType::Claude).expect("load snapshot");
         assert!(
             snapshot.mcp.rows.is_empty(),
             "startup snapshot must not load MCP rows"
@@ -5575,6 +5573,7 @@ base_url = "https://current.example.com/v1"
 
     #[test]
     #[serial]
+    #[ignore = "OpenClaw harness removed from this build: saved-only OpenClaw snapshot rows are no longer mirrored"]
     fn load_providers_openclaw_keeps_saved_only_snapshot_rows_missing_from_live_and_marks_them_out_of_config(
     ) {
         let _guard = lock_test_home_and_settings();

@@ -2619,6 +2619,7 @@ mod tests {
 
     #[test]
     #[serial(home_settings)]
+    #[ignore = "OpenClaw harness removed from this build: live-backed provider add no longer applies to it"]
     fn submit_provider_add_preserves_custom_openclaw_name_after_reload() {
         let home_dir = tempdir().expect("create temp home");
         let openclaw_dir = tempdir().expect("create temp openclaw dir");
@@ -3016,6 +3017,7 @@ mod tests {
 
     #[test]
     #[serial(home_settings)]
+    #[ignore = "OpenClaw harness removed from this build: live-backed provider editing no longer applies to it"]
     fn submit_provider_edit_preserves_custom_openclaw_name_after_reload() {
         let home_dir = tempdir().expect("create temp home");
         let openclaw_dir = tempdir().expect("create temp openclaw dir");
@@ -3110,6 +3112,7 @@ mod tests {
 
     #[test]
     #[serial(home_settings)]
+    #[ignore = "OpenClaw harness removed from this build: saved-only OpenClaw snapshot rows are no longer mirrored"]
     fn submit_provider_edit_keeps_saved_only_openclaw_snapshot_rows_visible() {
         let home_dir = tempdir().expect("create temp home");
         let openclaw_dir = tempdir().expect("create temp openclaw dir");
@@ -3173,6 +3176,7 @@ mod tests {
 
     #[test]
     #[serial(home_settings)]
+    #[ignore = "OpenClaw harness removed from this build: live-backed provider editing no longer applies to it"]
     fn submit_provider_edit_rejects_invalid_usage_script_for_openclaw_provider() {
         let home_dir = tempdir().expect("create temp home");
         let openclaw_dir = tempdir().expect("create temp openclaw dir");

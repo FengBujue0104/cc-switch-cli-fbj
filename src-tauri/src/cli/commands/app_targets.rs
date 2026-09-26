@@ -103,6 +103,21 @@ fn parse_app_target(value: &str, feature: &str) -> Result<AppType, AppError> {
     Ok(app)
 }
 
+/// Command handlers that take `AppType` from clap *or* from tests must still
+/// refuse retired harnesses. Clap `value(skip)` is the user-facing gate;
+/// this is the second gate so `provider::execute(Add, Gemini)` cannot print
+/// success and then vanish on `AppType::all()` persist.
+pub(crate) fn ensure_kept_app(app: &AppType) -> Result<(), AppError> {
+    if AppType::all().any(|kept| kept == *app) {
+        return Ok(());
+    }
+    Err(AppError::InvalidInput(format!(
+        "Unsupported app id: '{}'. Supported apps: {}",
+        app.as_str(),
+        supported_app_target_labels()
+    )))
+}
+
 pub(crate) fn app_target_names(apps: &[AppType]) -> String {
     apps.iter()
         .map(AppType::as_str)
@@ -215,6 +230,42 @@ mod tests {
                     "rejection message must not advertise removed harnesses: {rendered}"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn ensure_kept_app_rejects_removed_harnesses_and_accepts_app_type_all() {
+        for app in AppType::all() {
+            ensure_kept_app(&app).unwrap_or_else(|err| {
+                panic!(
+                    "kept harness {} must pass ensure_kept_app: {err}",
+                    app.as_str()
+                )
+            });
+        }
+        for id in ["gemini", "opencode", "openclaw"] {
+            let app = AppType::from_str(id).expect("legacy parse");
+            let err = ensure_kept_app(&app)
+                .expect_err(&format!("{id} must be rejected by ensure_kept_app"));
+            let rendered = err.to_string();
+            assert!(
+                rendered.contains("Unsupported app id"),
+                "unexpected error for {id}: {rendered}"
+            );
+            assert!(
+                rendered.contains("claude, codex, hermes, pi"),
+                "rejection must list kept apps: {rendered}"
+            );
+            assert!(
+                !rendered
+                    .split_once("Supported apps: ")
+                    .map_or(false, |(_, rest)| {
+                        rest.contains("gemini")
+                            || rest.contains("opencode")
+                            || rest.contains("openclaw")
+                    }),
+                "rejection must not advertise removed harnesses: {rendered}"
+            );
         }
     }
 }

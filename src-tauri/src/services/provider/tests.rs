@@ -7104,6 +7104,7 @@ fn provider_update_does_not_infer_gemini_common_config_opt_in() {
 
 #[test]
 #[serial]
+#[ignore = "Gemini harness removed from this build: provider switch no longer persists Gemini snapshots"]
 fn common_config_snippet_is_not_persisted_into_gemini_provider_snapshot_on_switch() {
     let temp_home = TempDir::new().expect("create temp home");
     let _env = TestEnvGuard::isolated(temp_home.path());
