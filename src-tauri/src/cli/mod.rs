@@ -151,6 +151,26 @@ mod tests {
         );
     }
 
+    #[test]
+    fn hidden_provider_subcommands_stay_hidden() {
+        let mut cmd = Cli::command();
+        let provider = cmd
+            .find_subcommand_mut("provider")
+            .expect("provider command");
+        for name in [
+            "speedtest",
+            "stream-check",
+            "fetch-models",
+            "quota",
+            "usage-query",
+        ] {
+            let sub = provider.find_subcommand(name).unwrap_or_else(|| {
+                panic!("{name} should still exist as a hidden provider subcommand")
+            });
+            assert!(sub.is_hide_set(), "{name} must stay clap-hidden");
+        }
+    }
+
     #[cfg(feature = "legacy-commands")]
     #[test]
     fn skills_market_command_parses() {

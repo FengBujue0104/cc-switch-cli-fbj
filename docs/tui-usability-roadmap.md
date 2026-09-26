@@ -3,16 +3,22 @@
 This note tracks the ongoing TUI usability overhaul: what has landed, and the
 remaining work in priority order. Update it as items complete.
 
+**This fork's user-facing TUI is four sidebar items: Home / Providers /
+Settings / Exit.** MCP, Prompts, Sessions, Skills, and Usage pages still
+exist as leftover library routes and keymap tables; they are not in
+`NavItem::ALL` and must not be advertised in `?` help. Product contract is
+`README.md`.
+
 ## Landed (2026-07)
 
 For context — the foundations the remaining items build on:
 
 - **Keymap registry** (`src/cli/tui/keymap.rs`): one binding table per page
   drives both key dispatch and the page key bar, so hints can never drift
-  from handlers. Migrated: Providers, MCP, Prompts, Skills (installed),
-  Usage, Sessions. Sessions binds only its action keys (Enter/R/d/r/a);
-  pane/list navigation stays explicit in the handler (pane-dependent and
-  reused by the filter path), with a static nav-hint prefix on the bar.
+  from handlers. The **reachable** page is Providers (plus Settings
+  overlays). Leftover MCP / Prompts / Skills / Usage / Sessions keymap
+  modules still compile for those hidden routes; do not put them back in
+  the sidebar.
 - **Overlay frame** (`src/cli/tui/ui/overlay/frame.rs`): all ~24 dialogs
   render through `overlay_frame`/`overlay_frame_at` with unified body
   padding; fixed-count pickers size to their options (`FitRows`).
@@ -23,14 +29,13 @@ For context — the foundations the remaining items build on:
   semantic colors (`fg_strong`, `on_accent`, `on_comment`), Settings ›
   Theme (Auto/Dark/Light, persisted), COLORFGBG auto-detection, curated
   ansi256 pins for both palettes.
-- **Help sheet generation** (`src/cli/tui/help.rs::global_help_lines`): the
-  MCP/Prompts/Sessions/Skills/Usage page lines are generated from
-  `keymap::<page>::help_items` (a `never` sentinel + `fn_addr_eq` skips
-  hidden aliases like Usage's reverse-Tab), so those hints track dispatch.
-  Providers/Config/Settings and the Hermes-only Memory line stay
-  hand-written (`texts::tui_help_line_*`) for their app-scope prose; the
-  static prelude is `texts::tui_help_prelude`. `context_help_for_app` now
-  takes `&UiData` to evaluate the keymap labels.
+- **Help sheet generation** (`src/cli/tui/help.rs::global_help_lines`):
+  global `?` help is the static prelude plus Providers and Settings
+  bullets (`texts::tui_help_line_*`). It must not list MCP / Prompts /
+  Sessions / Skills / Usage. Per-app provider lines: Hermes has enable;
+  Pi is additive Space add/remove without temp-launch or failover;
+  Claude/Codex keep switch / temp-launch / failover. `context_help_for_app`
+  takes `&UiData` for overlay-local help.
 - **Icon fallback** (`src/cli/tui/icons.rs`): `CC_SWITCH_ICONS=auto|emoji|
   ascii` env override + a persisted Settings › Icons row, mirroring the
   color-mode philosophy. `Auto` keeps emoji unless the locale is clearly

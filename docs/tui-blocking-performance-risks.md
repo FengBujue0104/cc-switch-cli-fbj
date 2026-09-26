@@ -1,17 +1,22 @@
 # TUI Blocking Performance Risks
 
 This note tracks the blocking paths found while benchmarking `cc-switch` with
-generated provider, usage, session, MCP, and skill data. The focus here is not
-raw page-load time, but work that can occupy the TUI event loop or delay the
-first frame enough to feel frozen.
+generated provider data (and leftover usage/session/MCP/skill fixtures from
+upstream). The focus here is not raw page-load time, but work that can occupy
+the TUI event loop or delay the first frame enough to feel frozen.
+
+This fork's sidebar is Home / Providers / Settings / Exit.
+`UiData::load_base_from_state_with_mode` skips MCP and skills snapshot IO on
+startup (`startup_ui_data_skips_mcp_and_skills_snapshot_io`). Do not add that
+IO back.
 
 ## 1. First-frame TUI startup load
 
 The highest-priority blocking path is TUI startup. `run()` creates the terminal
 and then calls `initialize_app_state_with(..., UiData::load, ...)` before the
-main render loop draws its first frame. `UiData::load()` opens app state, loads
-provider/live config snapshots, MCP, prompts, config, skills, proxy state, and
-usage/pricing data synchronously.
+main render loop draws its first frame. `UiData::load()` opens app state and
+loads provider/live config snapshots, prompts, config, and proxy state
+synchronously. MCP and skills snapshots stay empty on this path.
 
 Impact: users can see a blank or non-interactive terminal while startup IO,
 SQLite reads, live config sync, or usage aggregation completes.
