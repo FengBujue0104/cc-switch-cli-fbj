@@ -13463,11 +13463,8 @@ mod tests {
         assert_eq!(texts::skills_management(), "技能管理");
         assert_eq!(texts::menu_manage_mcp(), "🔌 MCP 服务器");
 
-        // The per-page bullets for MCP/Prompts/Sessions/Skills/Usage are now
-        // generated from the keymap registry (covered in cli::tui::help
-        // tests); here we pin the static Chinese pieces the help sheet still
-        // owns: the prelude and the hand-written Providers/Config/Settings
-        // lines.
+        // Global help is the four-item sidebar. Pin the static Chinese pieces
+        // the help sheet still owns: the prelude and the Providers/Settings lines.
         let prelude = texts::tui_help_prelude();
         assert!(prelude.contains("文本输入：Ctrl+A/E 行首/行尾"));
         assert!(!prelude.contains("Text input:"));

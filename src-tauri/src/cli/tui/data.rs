@@ -1133,14 +1133,12 @@ impl UiData {
         provider_load_mode: ProviderLoadMode,
     ) -> Result<Self, AppError> {
         let providers = load_providers_with_mode(state, app_type, provider_load_mode)?;
-        let mcp = load_mcp(state)?;
+        // Four-item nav has no MCP / Skills pages; skip that IO on startup.
+        let mcp = McpSnapshot::default();
         let prompts = load_prompts(state, app_type)?;
         let pi_prompts = load_pi_prompts(app_type)?;
         let config = load_config_snapshot(state, app_type)?;
-        let skills = match provider_load_mode {
-            ProviderLoadMode::SyncLive => load_skills_snapshot()?,
-            ProviderLoadMode::SnapshotOnly => load_skills_snapshot_from_state(state)?,
-        };
+        let skills = SkillsSnapshot::default();
         let proxy = load_proxy_snapshot_from_state(state, app_type)?;
 
         Ok(Self {
@@ -1692,6 +1690,7 @@ fn openclaw_default_model_ref_parts(default_ref: &str) -> Option<(&str, &str)> {
     default_ref.split_once('/')
 }
 
+#[allow(dead_code)]
 fn load_mcp(state: &AppState) -> Result<McpSnapshot, AppError> {
     let servers = McpService::get_all_servers(state)?;
     let mut rows = servers
@@ -3210,12 +3209,14 @@ fn proxy_target_snapshot_for_app(
         })
 }
 
+#[allow(dead_code)]
 fn load_skills_snapshot() -> Result<SkillsSnapshot, AppError> {
     Ok(skills_snapshot_from_index(
         SkillService::load_index_after_migration()?,
     ))
 }
 
+#[allow(dead_code)]
 fn load_skills_snapshot_from_state(state: &AppState) -> Result<SkillsSnapshot, AppError> {
     Ok(skills_snapshot_from_index(
         SkillService::load_index_from_database(&state.db)?,
@@ -5099,6 +5100,56 @@ base_url = "https://current.example.com/v1"
             crate::settings::get_current_provider(&AppType::Claude).as_deref(),
             Some("missing-local-current"),
             "snapshot provider load must not repair or clear local settings"
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn startup_ui_data_skips_mcp_and_skills_snapshot_io() {
+        let _guard = lock_test_home_and_settings();
+        let temp = tempdir().expect("create tempdir");
+        let _home = HomeGuard::set(temp.path());
+
+        let state = load_state().expect("initialize database");
+        let server = McpServer {
+            id: "startup-mcp".into(),
+            name: "Startup MCP".into(),
+            server: json!({"command": "true"}),
+            apps: crate::app_config::McpApps {
+                claude: true,
+                ..Default::default()
+            },
+            description: None,
+            homepage: None,
+            docs: None,
+            tags: vec![],
+        };
+        state
+            .db
+            .save_mcp_server(&server)
+            .expect("seed mcp server");
+
+        let snapshot = UiData::load_fast_snapshot_from_state(&state, &AppType::Claude)
+            .expect("load snapshot");
+        assert!(
+            snapshot.mcp.rows.is_empty(),
+            "startup snapshot must not load MCP rows"
+        );
+        assert!(
+            snapshot.skills.installed.is_empty(),
+            "startup snapshot must not load skills"
+        );
+        drop(state);
+
+        let loaded =
+            UiData::load_without_usage_pricing(&AppType::Claude).expect("load without usage");
+        assert!(
+            loaded.mcp.rows.is_empty(),
+            "startup load must not load MCP rows"
+        );
+        assert!(
+            loaded.skills.installed.is_empty(),
+            "startup load must not load skills"
         );
     }
 

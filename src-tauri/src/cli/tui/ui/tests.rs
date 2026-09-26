@@ -7100,78 +7100,30 @@ fn global_help_text(app_type: AppType) -> String {
 }
 
 #[test]
-fn help_text_mentions_import_existing_for_mcp() {
+fn global_help_matches_four_item_nav() {
     let _lock = lock_env();
     let _lang = use_test_language(Language::English);
-    // MCP and Skills both generate their import line from the same label
-    // (tui_*_action_import_existing); assert the wording on BOTH lines so a
-    // regression on either page is caught, not just its presence somewhere.
-    let help = global_help_text(AppType::Claude);
-    let mcp_line = help
-        .lines()
-        .find(|line| line.starts_with("- MCP:"))
-        .unwrap_or_else(|| panic!("no MCP help line: {help}"));
-    let skills_line = help
-        .lines()
-        .find(|line| line.starts_with("- Skills:"))
-        .unwrap_or_else(|| panic!("no Skills help line: {help}"));
-    assert!(
-        mcp_line.contains("i Import Existing"),
-        "MCP help line missing shared import wording: {mcp_line}"
-    );
-    assert!(
-        skills_line.contains("i Import Existing"),
-        "Skills help line missing shared import wording: {skills_line}"
-    );
-}
-
-#[test]
-fn help_text_shows_space_as_the_mcp_toggle_key() {
-    let _lock = lock_env();
-    for lang in [Language::English, Language::Chinese] {
-        let _lang = use_test_language(lang);
-        for app_type in [AppType::Claude, AppType::Hermes] {
-            let help = global_help_text(app_type.clone());
-            // The MCP toggle handler listens for Space (content_entities.rs);
-            // the help sheet used to claim `x` here.
+    for app_type in [AppType::Claude, AppType::Hermes, AppType::Codex, AppType::Pi] {
+        let help = global_help_text(app_type.clone());
+        assert!(
+            help.contains("- Providers:") || help.contains("- 供应商"),
+            "help for {app_type:?} should describe Providers: {help}"
+        );
+        assert!(
+            help.contains("- Settings:") || help.contains("- 设置"),
+            "help for {app_type:?} should describe Settings: {help}"
+        );
+        for removed in ["MCP", "Prompts", "Sessions", "Skills", "Usage"] {
             assert!(
-                help.contains("MCP: Space") || help.contains("MCP：Space"),
-                "help for {app_type:?}/{lang:?} should document Space as the MCP toggle"
-            );
-            assert!(
-                !help.contains("x toggle current"),
-                "stale `x` toggle wording in help for {app_type:?}/{lang:?}"
+                !help.lines().any(|line| {
+                    let trimmed = line.trim_start_matches("- ").trim_start_matches("-");
+                    trimmed.starts_with(&format!("{removed}:"))
+                        || trimmed.starts_with(&format!("{removed}："))
+                }),
+                "help for {app_type:?} must not advertise {removed}: {help}"
             );
         }
     }
-}
-
-#[test]
-fn generated_help_swaps_prompts_for_memory_on_hermes() {
-    let _lock = lock_env();
-    let _lang = use_test_language(Language::English);
-
-    let claude = global_help_text(AppType::Claude);
-    assert!(claude.contains("- Prompts: "), "{claude}");
-    assert!(!claude.contains("- Memory:"), "{claude}");
-    assert!(claude.contains("- Config: "), "{claude}");
-
-    let hermes = global_help_text(AppType::Hermes);
-    assert!(hermes.contains("- Memory: "), "{hermes}");
-    assert!(!hermes.contains("- Prompts:"), "{hermes}");
-    // Hermes has no Config route, so no Config line in its help sheet.
-    assert!(!hermes.contains("- Config:"), "{hermes}");
-}
-
-#[test]
-fn generated_usage_help_omits_the_hidden_reverse_tab_alias() {
-    let _lock = lock_env();
-    let _lang = use_test_language(Language::English);
-    let help = global_help_text(AppType::Claude);
-    // Shift+Tab (reverse metric) is a never-shown alias, so it is skipped in
-    // the generated help even though Tab (forward) is listed.
-    assert!(help.contains("Tab switch metric"), "{help}");
-    assert!(!help.contains("Shift+Tab"), "{help}");
 }
 
 #[test]

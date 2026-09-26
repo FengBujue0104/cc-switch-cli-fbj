@@ -533,15 +533,9 @@ fn webdav_field_help(field: WebDavSyncField) -> HelpContent {
     }
 }
 
-/// The global help sheet: the static prelude, then one key line per page.
-/// The generated pages (MCP/Prompts/Sessions/Skills/Usage) come from the
-/// keymap registry so their hints track dispatch; Providers/Config/Settings
-/// (and the Hermes-only Memory line) stay hand-written for their app-scope
-/// prose. Order matches the previous static sheet.
-fn global_help_lines(app: &App, data: &UiData) -> Vec<String> {
-    use super::keymap;
-
-    let hermes = matches!(app.app_type, AppType::Hermes);
+/// The global help sheet: the static prelude, then the four-item sidebar
+/// (Home / Providers / Settings / Exit). Removed pages are not advertised.
+fn global_help_lines(app: &App, _data: &UiData) -> Vec<String> {
     let mut lines: Vec<String> = texts::tui_help_prelude()
         .lines()
         .map(str::to_string)
@@ -551,48 +545,8 @@ fn global_help_lines(app: &App, data: &UiData) -> Vec<String> {
         "- {}",
         texts::tui_help_line_providers(&app.app_type)
     ));
-    lines.push(keymap_bullet("MCP", keymap::mcp::help_items(app, data)));
-    if hermes {
-        lines.push(format!("- {}", texts::tui_help_line_memory()));
-    } else {
-        lines.push(keymap_bullet(
-            crate::t!("Prompts", "提示词"),
-            keymap::prompts::help_items(app, data),
-        ));
-    }
-    lines.push(keymap_bullet(
-        crate::t!("Sessions", "会话"),
-        keymap::sessions::help_items(app, data),
-    ));
-    lines.push(keymap_bullet(
-        crate::t!("Skills", "技能"),
-        keymap::skills_installed::help_items(app, data),
-    ));
-    lines.push(keymap_bullet(
-        crate::t!("Usage", "使用统计"),
-        keymap::usage::help_items(app, data),
-    ));
-    if !hermes {
-        lines.push(format!("- {}", texts::tui_help_line_config()));
-    }
     lines.push(format!("- {}", texts::tui_help_line_settings()));
     lines
-}
-
-/// Render one generated page-key bullet: `- <name>: <k1> <label1>, ...`,
-/// with the locale's list punctuation.
-fn keymap_bullet(name: &str, items: Vec<(&'static str, &'static str)>) -> String {
-    let (colon, sep) = if i18n::is_chinese() {
-        ("：", "，")
-    } else {
-        (": ", ", ")
-    };
-    let keys = items
-        .iter()
-        .map(|(display, label)| format!("{display} {label}"))
-        .collect::<Vec<_>>()
-        .join(sep);
-    format!("- {name}{colon}{keys}")
 }
 
 fn provider_field_help(app_type: AppType, field: ProviderAddField) -> HelpContent {
