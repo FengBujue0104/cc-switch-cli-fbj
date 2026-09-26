@@ -8,7 +8,7 @@ use crate::cli::commands::config_openclaw;
 use crate::cli::commands::config_s3;
 use crate::cli::commands::config_webdav;
 use crate::cli::i18n::texts;
-use crate::cli::ui::{error, highlight, info, success, to_json, warning};
+use crate::cli::ui::{error, highlight, info, mask_json_secrets, success, to_json, warning};
 use crate::error::AppError;
 use crate::services::ConfigService;
 use crate::store::AppState;
@@ -98,8 +98,9 @@ fn show_config() -> Result<(), AppError> {
     println!("{}", "=".repeat(50));
     println!();
 
-    // Display in pretty JSON format
-    let json = to_json(&*config).map_err(|e| AppError::Message(e.to_string()))?;
+    let mut value = serde_json::to_value(&*config).map_err(|e| AppError::Message(e.to_string()))?;
+    mask_json_secrets(&mut value);
+    let json = to_json(&value).map_err(|e| AppError::Message(e.to_string()))?;
     println!("{}", json);
 
     Ok(())

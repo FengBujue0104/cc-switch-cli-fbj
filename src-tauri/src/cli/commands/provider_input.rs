@@ -7,7 +7,7 @@ use crate::claude_model_config::{
     CLAUDE_LEGACY_SMALL_FAST_MODEL_ENV_KEY, CLAUDE_SUBAGENT_MODEL_ENV_KEY,
 };
 use crate::cli::i18n::texts;
-use crate::cli::ui::info;
+use crate::cli::ui::{info, mask_secret_for_display};
 use crate::error::AppError;
 use crate::provider::{AuthBinding, AuthBindingSource, ClaudeApiKeyField, Provider, ProviderMeta};
 use crate::provider_preset_builtin::{builtin_provider_preset_value, BuiltinProviderPresetId};
@@ -4304,26 +4304,6 @@ pub fn prompt_optional_fields(current: Option<&Provider>) -> Result<OptionalFiel
         icon_color: None,
         sort_index,
     })
-}
-
-fn mask_secret_for_display(value: &str) -> String {
-    let value = value.trim();
-    if value.is_empty() {
-        return String::new();
-    }
-    let count = value.chars().count();
-    if count <= 8 {
-        return "********".to_string();
-    }
-    let tail: String = value
-        .chars()
-        .rev()
-        .take(4)
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
-        .collect();
-    format!("********{tail}")
 }
 
 fn print_configured_api_key(provider: &Provider, app_type: &AppType) {

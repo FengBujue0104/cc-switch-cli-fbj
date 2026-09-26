@@ -521,15 +521,7 @@ fn export_db_to_multi_app_config(db: &Database) -> Result<MultiAppConfig, AppErr
 
     let mut config = MultiAppConfig::default();
 
-    for app in [
-        AppType::Claude,
-        AppType::Codex,
-        AppType::Gemini,
-        AppType::OpenCode,
-        AppType::Hermes,
-        AppType::OpenClaw,
-        AppType::Pi,
-    ] {
+    for app in AppType::all() {
         let app_key = app.as_str();
         let providers = db.get_all_providers(app_key)?;
         let current = db.get_current_provider(app_key)?.unwrap_or_default();
@@ -576,14 +568,7 @@ fn persist_multi_app_config_to_db_preserving_current_providers(
         .map(crate::app_config::AppType::as_str)
         .collect::<std::collections::HashSet<_>>();
 
-    for app in [
-        AppType::Claude,
-        AppType::Codex,
-        AppType::Gemini,
-        AppType::OpenCode,
-        AppType::Hermes,
-        AppType::OpenClaw,
-    ] {
+    for app in AppType::all() {
         let app_key = app.as_str();
         let manager = config.get_manager(&app);
 
@@ -1321,5 +1306,99 @@ requires_openai_auth = true
         let state = AppState::try_new_with_startup_recovery().expect("second startup");
         assert!(state.db.get_config_snippet("claude").unwrap().is_none());
         assert!(state.db.is_config_snippet_cleared("claude").unwrap());
+    }
+
+    #[test]
+    #[serial(home_settings)]
+    fn persist_and_export_walk_app_type_all_only() {
+        use crate::app_config::AppType;
+
+        let live: Vec<_> = AppType::all().map(|app| app.as_str().to_string()).collect();
+        assert!(live.contains(&"pi".to_string()));
+        assert!(!live.contains(&"gemini".to_string()));
+        assert!(!live.contains(&"opencode".to_string()));
+        assert!(!live.contains(&"openclaw".to_string()));
+
+        let temp_home = TempDir::new().expect("create temp home");
+        let _env = TestEnvGuard::isolated(temp_home.path());
+        let state = AppState::try_new().expect("create state");
+
+        let pi = Provider::with_id(
+            "pi-keep".into(),
+            "Pi Keep".into(),
+            json!({"env": {"PI_API_KEY": "pi-secret"}}),
+            None,
+        );
+        let gemini_snapshot = Provider::with_id(
+            "gemini-from-snapshot".into(),
+            "Gemini Snapshot".into(),
+            json!({"env": {"GEMINI_API_KEY": "snap"}}),
+            None,
+        );
+        let gemini_db = Provider::with_id(
+            "gemini-in-db".into(),
+            "Gemini DB".into(),
+            json!({"env": {"GEMINI_API_KEY": "db"}}),
+            None,
+        );
+
+        state
+            .db
+            .save_provider("gemini", &gemini_db)
+            .expect("seed gemini row in db");
+
+        {
+            let mut config = state.config.write().expect("write config");
+            let pi_manager = config
+                .get_manager_mut(&AppType::Pi)
+                .expect("pi manager");
+            pi_manager.providers.insert(pi.id.clone(), pi.clone());
+            pi_manager.current = pi.id.clone();
+            let gemini_manager = config
+                .get_manager_mut(&AppType::Gemini)
+                .expect("gemini manager");
+            gemini_manager
+                .providers
+                .insert(gemini_snapshot.id.clone(), gemini_snapshot.clone());
+            gemini_manager.current = gemini_snapshot.id.clone();
+        }
+
+        state.save().expect("persist snapshot");
+
+        assert!(
+            state
+                .db
+                .get_provider_by_id("pi-keep", "pi")
+                .expect("read pi")
+                .is_some(),
+            "Pi must be written because AppType::all() includes it"
+        );
+        assert!(
+            state
+                .db
+                .get_provider_by_id("gemini-from-snapshot", "gemini")
+                .expect("read gemini snapshot")
+                .is_none(),
+            "removed harness ids must not be upserted from this snapshot"
+        );
+        assert!(
+            state
+                .db
+                .get_provider_by_id("gemini-in-db", "gemini")
+                .expect("read gemini db row")
+                .is_some(),
+            "existing removed-harness rows stay in the database"
+        );
+
+        let exported = super::export_db_to_multi_app_config(&state.db).expect("export");
+        let pi_manager = exported.get_manager(&AppType::Pi).expect("exported pi");
+        assert!(pi_manager.providers.contains_key("pi-keep"));
+        let gemini_manager = exported
+            .get_manager(&AppType::Gemini)
+            .expect("default gemini slot");
+        assert!(
+            gemini_manager.providers.is_empty(),
+            "export must not load removed harness providers from DB"
+        );
     }
 }
