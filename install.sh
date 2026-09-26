@@ -98,8 +98,11 @@ fi
 
 extract_tag_name() {
   local json="$1"
-  if command -v python3 >/dev/null 2>&1; then
-    printf '%s' "${json}" | python3 -c 'import json,sys
+  if ! command -v python3 >/dev/null 2>&1; then
+    err "python3 is required to parse the GitHub Releases JSON."
+    exit 1
+  fi
+  printf '%s' "${json}" | python3 -c 'import json,sys
 try:
     data = json.load(sys.stdin)
 except Exception:
@@ -109,9 +112,6 @@ if not isinstance(tag, str) or not tag:
     raise SystemExit(1)
 print(tag)
 '
-  else
-    printf '%s' "${json}" | grep -oE '"tag_name":[[:space:]]*"[^"]+"' | head -n 1 | sed -E 's/.*"tag_name":[[:space:]]*"([^"]+)".*/\1/'
-  fi
 }
 
 tag_name="$(extract_tag_name "${release_json}")"

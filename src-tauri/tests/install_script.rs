@@ -359,4 +359,12 @@ fn install_and_publish_scripts_agree_on_tagged_linux_x64_asset_name() {
         !install.contains("linux-x64-musl"),
         "this fork's install.sh must not advertise musl-named assets"
     );
+    assert!(
+        install.contains("python3 is required to parse the GitHub Releases JSON"),
+        "install.sh must require python3 to parse tag_name"
+    );
+    assert!(
+        !install.contains("grep -oE"),
+        "install.sh must not grep tag_name out of the Releases JSON"
+    );
 }

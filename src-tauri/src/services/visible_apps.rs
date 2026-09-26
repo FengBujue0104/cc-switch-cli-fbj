@@ -15,6 +15,16 @@ use crate::settings::{self, VisibleApps, VisibleAppsMode};
 pub fn apply_startup_policy() -> Result<VisibleApps, AppError> {
     let visible_apps = settings::default_visible_apps();
     let mut app_settings = settings::get_settings();
+    let already_pinned = app_settings.visible_apps == visible_apps
+        && app_settings.visible_apps_settings.mode == VisibleAppsMode::Manual
+        && app_settings.visible_apps_settings.auto_prompt_decided
+        && app_settings
+            .visible_apps_settings
+            .manual_hidden_installed_notices
+            .is_empty();
+    if already_pinned {
+        return Ok(visible_apps);
+    }
     app_settings.visible_apps = visible_apps.clone();
     app_settings.visible_apps_settings.mode = VisibleAppsMode::Manual;
     app_settings.visible_apps_settings.auto_prompt_decided = true;
@@ -166,9 +176,17 @@ mod tests {
         let _env = EnvGuard::set_home(temp_home.path());
 
         let first = apply_startup_policy().expect("first launch");
+        let settings_path = temp_home.path().join(".cc-switch").join("settings.json");
+        let before = std::fs::read(&settings_path).expect("read settings after first pin");
+
         let second = apply_startup_policy().expect("second launch");
 
         assert_eq!(first, second);
         assert_eq!(second, settings::default_visible_apps());
+        let after = std::fs::read(&settings_path).expect("read settings after second pin");
+        assert_eq!(
+            before, after,
+            "already-pinned startup policy must not rewrite settings.json"
+        );
     }
 }
