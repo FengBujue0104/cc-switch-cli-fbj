@@ -105,6 +105,7 @@ struct ReleaseAsset {
 
 #[derive(Debug, Clone)]
 enum ResolvedRelease {
+    #[allow(dead_code)]
     Manifest {
         target_tag: String,
         manifest: UpdateManifest,
@@ -116,6 +117,7 @@ enum ResolvedRelease {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 enum ManifestFetchError {
     NotFound,
     Invalid(AppError),
@@ -345,6 +347,7 @@ fn create_http_client() -> Result<reqwest::Client, AppError> {
     Ok(crate::proxy::http_client::get())
 }
 
+#[allow(dead_code)]
 fn update_manifest_url(repo_url: &str, tag: Option<&str>) -> Result<Url, AppError> {
     match tag {
         Some(tag) => release_page_url(
@@ -358,6 +361,7 @@ fn update_manifest_url(repo_url: &str, tag: Option<&str>) -> Result<Url, AppErro
     }
 }
 
+#[allow(dead_code)]
 async fn fetch_update_manifest(
     client: &reqwest::Client,
     repo_url: &str,
@@ -402,6 +406,7 @@ fn manifest_target_tag(manifest: &UpdateManifest) -> Result<String, AppError> {
     Ok(tag)
 }
 
+#[allow(dead_code)]
 fn validate_requested_manifest_tag(
     manifest: &UpdateManifest,
     requested_tag: &str,
@@ -673,37 +678,16 @@ async fn resolve_target_release(
     repo_url: &str,
     version: Option<&str>,
 ) -> Result<ResolvedRelease, AppError> {
+    // This fork publishes checksums.txt via GitHub Releases (see
+    // scripts/publish-release.sh). It does not ship a signed latest.json, so
+    // the updater never prefers the minisign manifest path.
     if let Some(version) = version.map(str::trim).filter(|value| !value.is_empty()) {
         let target_tag = normalize_tag(version);
         validate_target_tag(&target_tag)?;
-
-        match fetch_update_manifest(client, repo_url, Some(&target_tag)).await {
-            Ok(manifest) => {
-                validate_requested_manifest_tag(&manifest, &target_tag)?;
-                return Ok(ResolvedRelease::Manifest {
-                    target_tag,
-                    manifest,
-                });
-            }
-            Err(ManifestFetchError::NotFound) => {}
-            Err(ManifestFetchError::Invalid(err)) => return Err(err),
-        }
-
         return Ok(ResolvedRelease::Legacy {
             target_tag: target_tag.clone(),
             release: fetch_release_by_tag(client, repo_url, &target_tag).await?,
         });
-    }
-
-    match fetch_update_manifest(client, repo_url, None).await {
-        Ok(manifest) => {
-            return Ok(ResolvedRelease::Manifest {
-                target_tag: manifest_target_tag(&manifest)?,
-                manifest,
-            });
-        }
-        Err(ManifestFetchError::NotFound) => {}
-        Err(ManifestFetchError::Invalid(err)) => return Err(err),
     }
 
     let target_tag = fetch_latest_release_tag(client, repo_url).await?;

@@ -95,7 +95,7 @@ fn tui_update_check_marks_homebrew_package_manager_update() {
 #[serial(homebrew_update)]
 async fn check_for_update_from_repo_uses_supplied_repo_url() {
     let _homebrew = EnvVarGuard::remove("HOMEBREW_PREFIX");
-    let (repo_url, server) = spawn_update_manifest_server("v999.0.0").await;
+    let (repo_url, server) = spawn_github_releases_server("v999.0.0").await;
 
     let info = check_for_update_from_repo(&repo_url)
         .await
@@ -137,7 +137,7 @@ fn update_check_info_json_uses_cli_field_names() {
 #[serial(homebrew_update)]
 async fn check_for_update_from_repo_marks_homebrew_managed_install() {
     let _homebrew = force_homebrew_install_for_test();
-    let (repo_url, server) = spawn_update_manifest_server("v999.0.1").await;
+    let (repo_url, server) = spawn_github_releases_server("v999.0.1").await;
 
     let info = check_for_update_from_repo(&repo_url)
         .await
@@ -151,26 +151,54 @@ async fn check_for_update_from_repo_marks_homebrew_managed_install() {
     server.abort();
 }
 
-async fn spawn_update_manifest_server(
+async fn spawn_github_releases_server(
     version: &'static str,
 ) -> (String, tokio::task::JoinHandle<()>) {
-    let platform_key = current_platform_key().expect("platform key should resolve");
-    let manifest = serde_json::json!({
-        "version": version,
-        "platforms": {
-            platform_key: {
-                "url": "https://example.com/cc-switch.tar.gz",
-                "signature": "fake-signature"
-            }
-        }
+    let asset_name = format!("cc-switch-cli-{version}-linux-x64.tar.gz");
+    let latest_body = serde_json::json!({
+        "tag_name": version,
+        "assets": [{
+            "name": asset_name,
+            "browser_download_url": format!("https://example.invalid/{asset_name}")
+        }]
     });
-    let app = Router::new().route(
-        "/team/cc-switch-cli/releases/latest/download/latest.json",
-        get(move || {
-            let manifest = manifest.clone();
-            async move { axum::Json(manifest) }
-        }),
-    );
+    let tag_body = latest_body.clone();
+    let tags_path = format!("/api/v3/repos/team/cc-switch-cli/releases/tags/{version}");
+    let app = Router::new()
+        .route(
+            "/api/v3/repos/team/cc-switch-cli/releases/latest",
+            get({
+                let latest_body = latest_body.clone();
+                move || {
+                    let latest_body = latest_body.clone();
+                    async move { axum::Json(latest_body) }
+                }
+            }),
+        )
+        .route(
+            &tags_path,
+            get({
+                let tag_body = tag_body.clone();
+                move || {
+                    let tag_body = tag_body.clone();
+                    async move { axum::Json(tag_body) }
+                }
+            }),
+        )
+        .route(
+            "/team/cc-switch-cli/releases/latest/download/latest.json",
+            get(|| async {
+                axum::Json(serde_json::json!({
+                    "version": "v0.0.1",
+                    "platforms": {
+                        "linux-x86_64": {
+                            "url": "https://example.invalid/cc-switch-cli-linux-x64-musl.tar.gz",
+                            "signature": "stale-manifest"
+                        }
+                    }
+                }))
+            }),
+        );
 
     let listener = TcpListener::bind("127.0.0.1:0")
         .await
@@ -182,6 +210,31 @@ async fn spawn_update_manifest_server(
 
     let repo_url = format!("http://{addr}/team/cc-switch-cli");
     (repo_url, server)
+}
+
+#[tokio::test]
+async fn resolve_target_release_uses_github_releases_not_latest_json() {
+    let (repo_url, server) = spawn_github_releases_server("v5.11.0").await;
+    let client = create_http_client().expect("http client should initialize");
+    let release = resolve_target_release(&client, &repo_url, None)
+        .await
+        .expect("latest release should resolve from GitHub API");
+    match release {
+        ResolvedRelease::Legacy { target_tag, release } => {
+            assert_eq!(target_tag, "v5.11.0");
+            assert!(
+                release.assets.iter().any(|asset| {
+                    asset.name == "cc-switch-cli-v5.11.0-linux-x64.tar.gz"
+                }),
+                "legacy path should expose the tagged linux-x64 asset: {:?}",
+                release.assets.iter().map(|a| &a.name).collect::<Vec<_>>()
+            );
+        }
+        ResolvedRelease::Manifest { target_tag, .. } => {
+            panic!("updater must not prefer latest.json; got manifest tag {target_tag}");
+        }
+    }
+    server.abort();
 }
 
 fn linux_update_manifest(platform_key: &str, asset_arch: &str, base_url: &str) -> UpdateManifest {
@@ -291,10 +344,17 @@ fn release_asset_names_prefer_plain_then_tagged_variant() {
 fn linux_x86_64_candidates_include_portable_linux_x64_tarball() {
     let names = release_asset_candidates_for_platform("linux", "x86_64", LinuxLibcPreference::Auto)
         .expect("linux x86_64 candidates");
-    assert!(names.contains(&"cc-switch-cli-linux-x64-musl.tar.gz".to_string()));
     assert!(names.contains(&"cc-switch-cli-linux-x64.tar.gz".to_string()));
-    let tagged = release_asset_names("v5.10.5-fbj.1", "cc-switch-cli-linux-x64.tar.gz");
-    assert!(tagged.contains(&"cc-switch-cli-v5.10.5-fbj.1-linux-x64.tar.gz".to_string()));
+    let tagged = release_asset_names("v5.11.0", "cc-switch-cli-linux-x64.tar.gz");
+    assert!(tagged.contains(&"cc-switch-cli-linux-x64.tar.gz".to_string()));
+    assert!(tagged.contains(&"cc-switch-cli-v5.11.0-linux-x64.tar.gz".to_string()));
+    let windows = release_asset_candidates_for_platform(
+        "windows",
+        "x86_64",
+        LinuxLibcPreference::Auto,
+    )
+    .expect("windows x86_64 candidates");
+    assert!(windows.contains(&"cc-switch-cli-windows-x64.zip".to_string()));
 }
 
 #[test]
@@ -764,7 +824,7 @@ async fn fetch_update_manifest_reads_latest_json_without_release_api() {
 }
 
 #[tokio::test]
-async fn resolve_target_release_rejects_manifest_version_mismatch_for_explicit_version() {
+async fn resolve_target_release_ignores_mismatched_latest_json_for_explicit_version() {
     let platform_key = current_platform_key().expect("platform key should resolve");
     let manifest = serde_json::json!({
         "version": "v4.6.4",
@@ -776,13 +836,26 @@ async fn resolve_target_release_rejects_manifest_version_mismatch_for_explicit_v
         }
     });
 
-    let app = Router::new().route(
-        "/team/cc-switch-cli/releases/download/v4.6.3/latest.json",
-        get(move || {
-            let manifest = manifest.clone();
-            async move { axum::Json(manifest) }
-        }),
-    );
+    let app = Router::new()
+        .route(
+            "/team/cc-switch-cli/releases/download/v4.6.3/latest.json",
+            get(move || {
+                let manifest = manifest.clone();
+                async move { axum::Json(manifest) }
+            }),
+        )
+        .route(
+            "/api/v3/repos/team/cc-switch-cli/releases/tags/v4.6.3",
+            get(|| async {
+                axum::Json(serde_json::json!({
+                    "tag_name": "v4.6.3",
+                    "assets": [{
+                        "name": "cc-switch-cli-v4.6.3-linux-x64.tar.gz",
+                        "browser_download_url": "https://example.invalid/a.tar.gz"
+                    }]
+                }))
+            }),
+        );
 
     let listener = TcpListener::bind("127.0.0.1:0")
         .await
@@ -794,10 +867,13 @@ async fn resolve_target_release_rejects_manifest_version_mismatch_for_explicit_v
 
     let client = create_http_client().expect("http client should initialize");
     let repo_url = format!("http://{addr}/team/cc-switch-cli");
-    let err = resolve_target_release(&client, &repo_url, Some("v4.6.3"))
+    let release = resolve_target_release(&client, &repo_url, Some("v4.6.3"))
         .await
-        .expect_err("mismatched manifest version must fail");
-    assert!(err.to_string().contains("does not match requested version"));
+        .expect("explicit version should use GitHub Releases, not latest.json");
+    assert!(matches!(
+        release,
+        ResolvedRelease::Legacy { ref target_tag, .. } if target_tag == "v4.6.3"
+    ));
 
     server.abort();
 }
@@ -850,7 +926,7 @@ async fn resolve_target_release_falls_back_only_when_manifest_is_missing() {
 }
 
 #[tokio::test]
-async fn resolve_target_release_does_not_fallback_when_manifest_is_invalid() {
+async fn resolve_target_release_ignores_invalid_latest_json() {
     let app = Router::new()
         .route(
             "/team/cc-switch-cli/releases/latest/download/latest.json",
@@ -885,10 +961,13 @@ async fn resolve_target_release_does_not_fallback_when_manifest_is_invalid() {
 
     let client = create_http_client().expect("http client should initialize");
     let repo_url = format!("http://{addr}/team/cc-switch-cli");
-    let err = resolve_target_release(&client, &repo_url, None)
+    let release = resolve_target_release(&client, &repo_url, None)
         .await
-        .expect_err("invalid manifest should not fall back to legacy release");
-    assert!(err.to_string().contains("Failed to parse update manifest"));
+        .expect("invalid latest.json must be ignored in favor of GitHub Releases");
+    assert!(matches!(
+        release,
+        ResolvedRelease::Legacy { ref target_tag, .. } if target_tag == "v4.6.3"
+    ));
 
     server.abort();
 }
