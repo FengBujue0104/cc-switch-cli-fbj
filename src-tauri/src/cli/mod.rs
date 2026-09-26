@@ -145,6 +145,10 @@ mod tests {
             cmd.find_subcommand_mut("mcp").is_none(),
             "mcp management is out of scope for this fork"
         );
+        assert!(
+            cmd.find_subcommand_mut("usage").is_none(),
+            "usage management is out of scope for this fork"
+        );
     }
 
     #[cfg(feature = "legacy-commands")]

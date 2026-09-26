@@ -1,6 +1,8 @@
 use serde::Serialize;
 use serde_json::Value;
 
+use crate::app_config::AppType;
+
 pub fn to_json<T: Serialize>(value: &T) -> Result<String, serde_json::Error> {
     serde_json::to_string_pretty(value)
 }
@@ -51,6 +53,25 @@ fn mask_all_strings(value: &mut Value) {
     }
 }
 
+/// Drop retired harness managers and removed-command stores from `config show`.
+/// Persist/export still keep the full `MultiAppConfig`; this is display-only.
+pub(crate) fn restrict_config_show_json(value: &mut Value) {
+    let Value::Object(map) = value else {
+        return;
+    };
+    for app in [AppType::Gemini, AppType::OpenCode, AppType::OpenClaw] {
+        map.remove(app.as_str());
+    }
+    for key in ["mcp", "prompts", "skills"] {
+        map.remove(key);
+    }
+    if let Some(Value::Object(snippets)) = map.get_mut("common_config_snippets") {
+        for app in [AppType::Gemini, AppType::OpenCode, AppType::OpenClaw] {
+            snippets.remove(app.as_str());
+        }
+    }
+}
+
 /// Recursively mask `env` / `auth` objects and `api_key`-like fields in a
 /// JSON value. Used by `cc-switch config show`.
 pub(crate) fn mask_json_secrets(value: &mut Value) {
@@ -81,7 +102,7 @@ pub(crate) fn mask_json_secrets(value: &mut Value) {
 
 #[cfg(test)]
 mod tests {
-    use super::{mask_json_secrets, mask_secret_for_display};
+    use super::{mask_json_secrets, mask_secret_for_display, restrict_config_show_json};
     use serde_json::json;
 
     #[test]
@@ -134,6 +155,52 @@ mod tests {
             value["claude"]["providers"]["p1"]["settingsConfig"]["env"]["ANTHROPIC_API_KEY"],
             json!(mask_secret_for_display("sk-provider-plaintext-123456"))
         );
+    }
+
+    #[test]
+    fn restrict_config_show_json_drops_retired_harnesses_and_removed_stores() {
+        let mut value = json!({
+            "version": 2,
+            "claude": { "providers": {}, "current": "" },
+            "codex": { "providers": {}, "current": "" },
+            "hermes": { "providers": {}, "current": "" },
+            "pi": { "providers": {}, "current": "" },
+            "gemini": { "providers": { "g": {} }, "current": "g" },
+            "opencode": { "providers": { "o": {} }, "current": "" },
+            "openclaw": { "providers": { "c": {} }, "current": "" },
+            "mcp": { "servers": {} },
+            "prompts": {},
+            "skills": {},
+            "common_config_snippets": {
+                "claude": "keep",
+                "gemini": "drop",
+                "opencode": "drop",
+                "openclaw": "drop"
+            }
+        });
+        restrict_config_show_json(&mut value);
+        let obj = value.as_object().expect("object");
+        for kept in [
+            "version",
+            "claude",
+            "codex",
+            "hermes",
+            "pi",
+            "common_config_snippets",
+        ] {
+            assert!(obj.contains_key(kept), "kept key missing: {kept}");
+        }
+        for dropped in ["gemini", "opencode", "openclaw", "mcp", "prompts", "skills"] {
+            assert!(
+                !obj.contains_key(dropped),
+                "dropped key still present: {dropped}"
+            );
+        }
+        let snippets = obj["common_config_snippets"].as_object().expect("snippets");
+        assert_eq!(snippets.get("claude"), Some(&json!("keep")));
+        assert!(!snippets.contains_key("gemini"));
+        assert!(!snippets.contains_key("opencode"));
+        assert!(!snippets.contains_key("openclaw"));
     }
 }
 

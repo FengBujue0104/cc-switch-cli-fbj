@@ -7103,7 +7103,12 @@ fn global_help_text(app_type: AppType) -> String {
 fn global_help_matches_four_item_nav() {
     let _lock = lock_env();
     let _lang = use_test_language(Language::English);
-    for app_type in [AppType::Claude, AppType::Hermes, AppType::Codex, AppType::Pi] {
+    for app_type in [
+        AppType::Claude,
+        AppType::Hermes,
+        AppType::Codex,
+        AppType::Pi,
+    ] {
         let help = global_help_text(app_type.clone());
         assert!(
             help.contains("- Providers:") || help.contains("- 供应商"),
@@ -7121,6 +7126,22 @@ fn global_help_matches_four_item_nav() {
                         || trimmed.starts_with(&format!("{removed}："))
                 }),
                 "help for {app_type:?} must not advertise {removed}: {help}"
+            );
+        }
+        if matches!(app_type, AppType::Pi | AppType::Hermes) {
+            let lowered = help.to_lowercase();
+            assert!(
+                !lowered.contains("launch temp")
+                    && !lowered.contains("failover")
+                    && !help.contains("临时启动")
+                    && !help.contains("故障转移"),
+                "help for {app_type:?} must not advertise Claude/Codex-only provider keys: {help}"
+            );
+        }
+        if matches!(app_type, AppType::Pi) {
+            assert!(
+                help.contains("Space add/remove") || help.contains("Space 添加/移除"),
+                "Pi help should describe additive Space add/remove: {help}"
             );
         }
     }

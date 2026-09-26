@@ -70,4 +70,21 @@ fn config_show_masks_seeded_api_key() {
         show.contains("********3456"),
         "config show should print the masked secret form: {show}"
     );
+
+    let json_start = show.find('{').expect("config show JSON object");
+    let value: serde_json::Value =
+        serde_json::from_str(&show[json_start..]).expect("config show JSON should parse");
+    let obj = value.as_object().expect("config show JSON object");
+    for dropped in ["gemini", "opencode", "openclaw", "mcp", "prompts", "skills"] {
+        assert!(
+            !obj.contains_key(dropped),
+            "config show must not emit {dropped}: {show}"
+        );
+    }
+    for kept in ["claude", "codex", "hermes", "pi", "version"] {
+        assert!(
+            obj.contains_key(kept),
+            "config show must keep {kept}: {show}"
+        );
+    }
 }

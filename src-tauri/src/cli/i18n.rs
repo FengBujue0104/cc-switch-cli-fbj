@@ -625,15 +625,18 @@ pub mod texts {
             } else {
                 "Providers: Space add/remove, Enter/e edit, a add, c copy, d delete, t test, r refresh, x enable"
             }
+        } else if matches!(app_type, crate::app_config::AppType::Pi) {
+            // Pi is additive (Space add/remove) but has no failover, temp launch,
+            // or Hermes-style enable key.
+            if is_chinese() {
+                "供应商：Space 添加/移除，Enter/e 编辑，a 新增，c 复制，d 删除，t 测试，r 刷新"
+            } else {
+                "Providers: Space add/remove, Enter/e edit, a add, c copy, d delete, t test, r refresh"
+            }
         } else if is_chinese() {
-            // 仅本分支可达的应用是 Claude/Codex：`f` 需要 supports_failover()，
-            // 而 `x 设为默认` 仅 OpenClaw/Hermes 有（Hermes 走上面的专属分支），
-            // 所以这里不再标注已移除的 harness。
+            // Claude/Codex: `f` needs supports_failover(); `o` is Unix temp launch.
             "供应商：Space 切换，Enter/e 编辑，a 新增，c 复制，d 删除，t 测试，r 刷新，o 临时启动(Claude/Codex)，f 管理故障转移(Claude/Codex)"
         } else {
-            // Only Claude/Codex reach this branch: `f` needs supports_failover(),
-            // and `x set default` is OpenClaw/Hermes-only (Hermes takes the branch
-            // above), so no removed harness is annotated here.
             "Providers: Space switch, Enter/e edit, a add, c copy, d delete, t test, r refresh, o launch temp (Claude/Codex), f manage failover (Claude/Codex)"
         }
     }
@@ -13472,6 +13475,11 @@ mod tests {
         assert!(providers.contains("供应商：Space 切换"));
         assert!(!providers.contains("供应商详情："));
         assert!(!providers.contains("Providers:"));
+        let pi = texts::tui_help_line_providers(&crate::app_config::AppType::Pi);
+        assert!(pi.contains("供应商：Space 添加/移除"));
+        assert!(!pi.contains("临时启动"));
+        assert!(!pi.contains("故障转移"));
+        assert!(!pi.contains("Providers:"));
         assert!(texts::tui_help_line_config().contains("配置：Enter 打开/执行"));
         assert!(!texts::tui_help_line_config().contains("Config:"));
         assert!(texts::tui_help_line_settings().contains("设置：Enter 应用"));

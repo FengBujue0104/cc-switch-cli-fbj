@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Provider command handlers (`provider add`, `import-live`, `use`, and the rest of `provider::execute`) reject retired harness ids (`gemini` / `opencode` / `openclaw`) instead of printing success and then dropping the row on `AppType::all()` persist.
+- Pi `?` help no longer advertises Claude/Codex temp-launch and failover keys. `config show` omits retired harness managers and the leftover `mcp` / `prompts` / `skills` stores (export is unchanged).
 
 ## [5.11.0] - 2026-09-26
 
