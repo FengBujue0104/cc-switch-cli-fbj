@@ -2,12 +2,24 @@
 
 All notable changes to CC Switch CLI will be documented in this file.
 
-**Note:** This is a CLI fork of the original [CC-Switch](https://github.com/farion1231/cc-switch) project, maintained by [saladday](https://github.com/saladday).
+**Note:** This is a lightweight personal fork ([FengBujue0104/cc-switch-cli-fbj](https://github.com/FengBujue0104/cc-switch-cli-fbj)) of [SaladDay/cc-switch-cli](https://github.com/saladday/cc-switch-cli), itself a CLI fork of [CC-Switch](https://github.com/farion1231/cc-switch). Entries through 5.10.5 describe upstream SaladDay releases. Starting with 5.11.0, entries describe this fork.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [5.11.0] - 2026-09-26
+
+Personal lightweight fork of CC-Switch CLI. README.md is the product contract.
+
+### Changed
+
+- **Harness trim:** keep Claude Code, Codex, Hermes, and Pi. `gemini`, `opencode`, and `openclaw` are rejected at the command entry point. Library `FromStr` still parses retired ids so old databases load. Provider switch / live sync never writes removed harness live files (`should_sync_live` is false for those ids). PATH auto-detect of available harnesses is disabled; `settings visible-apps` is read-only.
+- **Command trim:** visible top-level commands are `auth`, `provider`, `use`, `config`, `proxy`, `settings`, `start`, `daemon`, `env`, `update`, `interactive`, `completions`. User-facing `skills`, `mcp`, `sessions`, and `usage` commands are removed. TUI sidebar is Home / Providers / Settings / Exit.
+- **Update source:** `cc-switch update` and install scripts target GitHub Releases for `FengBujue0104/cc-switch-cli-fbj` (SHA-256 via `checksums.txt`). Binaries built before `6c037571` (including `v5.10.5-fbj.1`) still point at upstream SaladDay.
+- **Platforms:** release packages are Windows x86_64 and Linux x86_64 musl only. Publish with `scripts/publish-release.sh`; no GitHub Actions release workflow.
+- **Hidden commands:** leftover live-file contact is hidden `cc-switch config openclaw` (explicit `~/.openclaw/` writes) plus a one-shot Gemini `~/.gemini/.env` credential scrub at startup. Hidden `config webdav` and `config s3` remain for backup sync.
 
 ## [5.10.5] - 2026-09-15
 
