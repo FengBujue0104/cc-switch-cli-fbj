@@ -96,7 +96,25 @@ else
   release_json="$(http_get "${API}/tags/${VERSION}")"
 fi
 
-tag_name="$(printf '%s' "${release_json}" | grep -oE '"tag_name":[[:space:]]*"[^"]+"' | head -n 1 | sed -E 's/.*"tag_name":[[:space:]]*"([^"]+)".*/\1/')"
+extract_tag_name() {
+  local json="$1"
+  if command -v python3 >/dev/null 2>&1; then
+    printf '%s' "${json}" | python3 -c 'import json,sys
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    raise SystemExit(1)
+tag = data.get("tag_name") if isinstance(data, dict) else None
+if not isinstance(tag, str) or not tag:
+    raise SystemExit(1)
+print(tag)
+'
+  else
+    printf '%s' "${json}" | grep -oE '"tag_name":[[:space:]]*"[^"]+"' | head -n 1 | sed -E 's/.*"tag_name":[[:space:]]*"([^"]+)".*/\1/'
+  fi
+}
+
+tag_name="$(extract_tag_name "${release_json}")"
 if [[ -z "${tag_name}" || "${tag_name}" == *'/'* || "${tag_name}" == *'..'* ]]; then
   err "Could not read a safe tag_name from ${REPO} ${VERSION}."
   exit 1
