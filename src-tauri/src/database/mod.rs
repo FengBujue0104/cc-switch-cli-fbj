@@ -78,6 +78,37 @@ fn readonly_database_open_flags() -> OpenFlags {
         | OpenFlags::SQLITE_OPEN_NOFOLLOW
 }
 
+/// SQLite WAL sidecar path: `{filename}-wal` / `{filename}-shm`, not `{stem}.wal`.
+fn sqlite_sidecar_path(db_path: &Path, suffix: &str) -> PathBuf {
+    let mut name = db_path.as_os_str().to_os_string();
+    name.push(suffix);
+    PathBuf::from(name)
+}
+
+/// Tighten `*-wal` / `*-shm` next to the DB after `journal_mode=WAL`.
+fn restrict_sqlite_wal_sidecars(db_path: &Path) {
+    #[cfg(unix)]
+    {
+        for suffix in ["-wal", "-shm"] {
+            let sidecar = sqlite_sidecar_path(db_path, suffix);
+            match crate::config::restrict_file_permissions(&sidecar) {
+                Ok(()) => {}
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+                Err(err) => {
+                    log::debug!(
+                        "failed to restrict sqlite sidecar {}: {err}",
+                        sidecar.display()
+                    );
+                }
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = db_path;
+    }
+}
+
 pub(crate) fn database_path() -> Result<PathBuf, AppError> {
     Ok(
         resolve_config_dir_without_following_user_symlinks(&get_app_config_dir())?
@@ -619,6 +650,7 @@ impl Database {
         // 短暂的 SQLITE_BUSY 自动重试而不是直接失败。
         conn.pragma_update(None, "journal_mode", "WAL")
             .map_err(|e| AppError::Database(e.to_string()))?;
+        restrict_sqlite_wal_sidecars(&db_path);
 
         // synchronous 保持 SQLite 默认（FULL）：本库除可重建的 usage 行外还存
         // provider/settings 等权威配置，不应全局降低耐久性。批量导入期间由
@@ -978,6 +1010,7 @@ impl Database {
         Self::configure_connection(&conn)?;
         conn.pragma_update(None, "journal_mode", "WAL")
             .map_err(|e| AppError::Database(e.to_string()))?;
+        restrict_sqlite_wal_sidecars(&db_path);
         Ok(Self {
             conn: Mutex::new(conn),
             runtime_key: self.runtime_key.clone(),

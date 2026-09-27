@@ -1200,8 +1200,10 @@ custom_providers: []\n";
     #[serial(home_settings)]
     fn write_hermes_config_source_creates_live_config_with_mode_0600() {
         with_test_home(|| {
-            write_hermes_config_source("custom_providers:\n  - name: acme\n    api_key: sk-secret\n")
-                .unwrap();
+            write_hermes_config_source(
+                "custom_providers:\n  - name: acme\n    api_key: sk-secret\n",
+            )
+            .unwrap();
             let path = get_hermes_config_path();
             assert!(path.exists(), "hermes live config should be created");
             assert_eq!(unix_mode(&path), 0o600);

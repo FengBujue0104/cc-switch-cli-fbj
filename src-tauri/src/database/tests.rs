@@ -2793,6 +2793,94 @@ fn init_creates_db_file_with_restrictive_permissions() {
     assert_eq!(db_perms, 0o600, "new db file should be created with 0o600");
 }
 
+#[cfg(unix)]
+fn sqlite_sidecar(db_path: &Path, suffix: &str) -> PathBuf {
+    let mut name = db_path.as_os_str().to_os_string();
+    name.push(suffix);
+    PathBuf::from(name)
+}
+
+#[cfg(unix)]
+fn unix_mode(path: &Path) -> u32 {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::metadata(path)
+        .unwrap_or_else(|err| panic!("metadata {}: {err}", path.display()))
+        .permissions()
+        .mode()
+        & 0o777
+}
+
+#[test]
+#[serial_test::serial]
+#[cfg(unix)]
+fn init_restricts_wal_and_shm_sidecar_permissions() {
+    let _lock = crate::test_support::lock_test_home_and_settings();
+    let temp = tempfile::tempdir().expect("create temp dir");
+    let _guard = ConfigDirEnvGuard::set(temp.path());
+
+    let _db = Database::init().expect("init db");
+
+    let db_path = temp.path().join("cc-switch.db");
+    let mut found = 0;
+    for suffix in ["-wal", "-shm"] {
+        let sidecar = sqlite_sidecar(&db_path, suffix);
+        if sidecar.exists() {
+            found += 1;
+            assert_eq!(
+                unix_mode(&sidecar),
+                0o600,
+                "{} should be 0o600 after WAL enable",
+                sidecar.display()
+            );
+        }
+    }
+    assert!(
+        found > 0,
+        "WAL enable should create at least one of cc-switch.db-wal / cc-switch.db-shm"
+    );
+}
+
+#[test]
+#[serial_test::serial]
+#[cfg(unix)]
+fn init_tightens_existing_0644_wal_and_shm_sidecars() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let _lock = crate::test_support::lock_test_home_and_settings();
+    let temp = tempfile::tempdir().expect("create temp dir");
+    let _guard = ConfigDirEnvGuard::set(temp.path());
+
+    // Keep the first connection open so SQLite does not checkpoint-and-delete
+    // the sidecars before we can loosen and re-restrict them.
+    let _db = Database::init().expect("init db");
+
+    let db_path = temp.path().join("cc-switch.db");
+    let mut loosened = Vec::new();
+    for suffix in ["-wal", "-shm"] {
+        let sidecar = sqlite_sidecar(&db_path, suffix);
+        if sidecar.exists() {
+            std::fs::set_permissions(&sidecar, std::fs::Permissions::from_mode(0o644))
+                .expect("loosen sidecar mode");
+            assert_eq!(unix_mode(&sidecar), 0o644);
+            loosened.push(sidecar);
+        }
+    }
+    assert!(
+        !loosened.is_empty(),
+        "expected WAL sidecars to exist so they can be tightened"
+    );
+
+    let _reopened = Database::init().expect("reopen db");
+    for sidecar in loosened {
+        assert_eq!(
+            unix_mode(&sidecar),
+            0o600,
+            "{} should be tightened to 0o600 on reopen",
+            sidecar.display()
+        );
+    }
+}
+
 #[test]
 #[serial_test::serial]
 #[cfg(unix)]
