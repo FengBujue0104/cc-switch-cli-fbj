@@ -65,7 +65,11 @@ Publish a new tag from a dev machine (no GitHub Actions); `<tag>` is the next ve
 scripts/publish-release.sh <tag>
 ```
 
-The script is written for this WSL setup: it builds the Windows zip with `cargo.exe` and falls back to `/mnt/c/Program Files/GitHub CLI/gh.exe` when `gh` is missing. Override either path with `WIN_CARGO` / `GH`.
+Linux musl and Windows x86_64 are both built locally. The Windows zip prefers `cargo xwin` targeting `x86_64-pc-windows-msvc`; without cargo-xwin it falls back to `WIN_CARGO` / `cargo.exe` (WSL). If `gh` is missing it falls back to `/mnt/c/Program Files/GitHub CLI/gh.exe`.
+
+To build the Windows zip on Linux you need: rustup target `x86_64-pc-windows-msvc` on the pinned 1.91.1 toolchain, `cargo install --locked cargo-xwin`, clang / lld / llvm, and `clang-cl` on PATH.
+
+Optional env: `PUBLISH_WINDOWS=0` skips Windows; `PUBLISH_LINUX=0` skips musl; `PUBLISH_UPLOAD=0` packages without uploading; `CC_SWITCH_WIN_BUILDER=xwin|cargo.exe` forces the Windows builder; `WIN_CARGO` / `GH` override those paths.
 
 ## Quick start
 

@@ -12,7 +12,7 @@ This file mirrors `CLAUDE.md` for Codex and other coding agents. Keep both files
 - **Visible CLI commands:** `auth`, `provider`, `use`, `config`, `proxy`, `settings`, `start`, `daemon`, `env`, `update`, `interactive`, `completions`. `start` / `daemon` are Unix-only. `proxy` is a default-on cargo feature. Do **not** re-add user-facing `skills`, `mcp`, `sessions`, or `usage` commands.
 - **TUI sidebar:** every app is Home / Providers / Settings / Exit. Help text and startup IO must match that four-item nav.
 - **Update source:** GitHub Releases for `FengBujue0104/cc-switch-cli-fbj`. Never retarget `cc-switch update` or install scripts at `saladday/cc-switch-cli`.
-- **Release platforms:** Windows x86_64 and Linux x86_64 musl only. Publish with `scripts/publish-release.sh`; there is no GitHub Actions release workflow.
+- **Release platforms:** Windows x86_64 and Linux x86_64 musl only. Publish with `scripts/publish-release.sh`; there is no GitHub Actions release workflow. On Linux, Windows zip prefers `cargo xwin` (`x86_64-pc-windows-msvc`) when cargo-xwin is installed; otherwise `WIN_CARGO` / `cargo.exe` (WSL). Prerequisites for that Linux path: rustup target `x86_64-pc-windows-msvc` on the pinned 1.91.1 toolchain, `cargo install --locked cargo-xwin`, clang / lld / llvm, and `clang-cl` on PATH. `PUBLISH_WINDOWS=0` / `PUBLISH_LINUX=0` skip a platform; `PUBLISH_UPLOAD=0` packages without `gh`; `CC_SWITCH_WIN_BUILDER=xwin|cargo.exe` forces the Windows builder.
 
 Hidden `config webdav` / `config s3` / `config openclaw` stay as hidden subcommands. Internal MCP / skills / sessions / usage **library** modules may still compile; they are not user-facing surfaces.
 

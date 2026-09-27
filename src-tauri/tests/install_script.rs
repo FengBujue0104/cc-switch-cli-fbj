@@ -89,11 +89,8 @@ impl Harness {
         assert!(status.success(), "tar should create archive");
 
         let hash = sha256_file(&archive_path);
-        fs::write(
-            &checksums_path,
-            format!("{hash}  {LINUX_ASSET}\n"),
-        )
-        .expect("checksums should be written");
+        fs::write(&checksums_path, format!("{hash}  {LINUX_ASSET}\n"))
+            .expect("checksums should be written");
         fs::write(
             &release_json_path,
             format!(
@@ -296,10 +293,7 @@ fn install_script_force_overwrites_and_requests_tagged_linux_x64_asset() {
 fn install_script_rejects_checksum_mismatch_and_keeps_existing_binary() {
     let harness = Harness::new();
     let installed_path = harness.install_dir.join("cc-switch");
-    write_executable(
-        &installed_path,
-        "#!/usr/bin/env bash\necho old build\n",
-    );
+    write_executable(&installed_path, "#!/usr/bin/env bash\necho old build\n");
 
     let output = harness.run(
         &[
@@ -308,13 +302,13 @@ fn install_script_rejects_checksum_mismatch_and_keeps_existing_binary() {
         ],
         None,
     );
-    assert!(!output.status.success(), "bad checksum must fail the install");
+    assert!(
+        !output.status.success(),
+        "bad checksum must fail the install"
+    );
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("Checksum mismatch"),
-        "stderr was: {stderr}"
-    );
+    assert!(stderr.contains("Checksum mismatch"), "stderr was: {stderr}");
 
     let requested = harness.requested_urls();
     assert!(
@@ -366,5 +360,60 @@ fn install_and_publish_scripts_agree_on_tagged_linux_x64_asset_name() {
     assert!(
         !install.contains("grep -oE"),
         "install.sh must not grep tag_name out of the Releases JSON"
+    );
+}
+
+#[test]
+fn publish_script_prefers_cargo_xwin_for_windows_msvc() {
+    let publish = fs::read_to_string(repo_root().join("scripts/publish-release.sh"))
+        .expect("read publish-release.sh");
+
+    assert!(
+        publish.contains("cargo xwin build --release --target x86_64-pc-windows-msvc"),
+        "publish-release.sh must prefer cargo xwin for the Windows MSVC target"
+    );
+    assert!(
+        publish.contains("WIN_CARGO"),
+        "publish-release.sh must keep the WIN_CARGO fallback"
+    );
+    assert!(
+        publish.contains("cargo.exe"),
+        "publish-release.sh must keep the cargo.exe WSL fallback"
+    );
+    assert!(
+        publish.contains("CC_SWITCH_WIN_BUILDER"),
+        "publish-release.sh must honor CC_SWITCH_WIN_BUILDER=xwin|cargo.exe"
+    );
+    assert!(
+        publish.contains("PUBLISH_WINDOWS"),
+        "publish-release.sh must honor PUBLISH_WINDOWS"
+    );
+    assert!(
+        publish.contains("PUBLISH_LINUX"),
+        "publish-release.sh must honor PUBLISH_LINUX so musl can be skipped"
+    );
+    assert!(
+        publish.contains("PUBLISH_UPLOAD"),
+        "publish-release.sh must honor PUBLISH_UPLOAD so GitHub upload can be skipped"
+    );
+    assert!(
+        publish.contains("cc-switch-cli-${TAG}-windows-x64.zip"),
+        "publish-release.sh must emit the tagged windows-x64 zip name"
+    );
+    assert!(
+        publish.contains("checksums.txt"),
+        "publish-release.sh must write checksums.txt"
+    );
+    assert!(
+        publish.contains("src-tauri/target/x86_64-pc-windows-msvc/release/cc-switch.exe"),
+        "Windows artifact path must stay on the MSVC target directory"
+    );
+    assert!(
+        publish.contains("z.write(exe, \"cc-switch.exe\")"),
+        "windows zip entry must remain cc-switch.exe"
+    );
+    assert!(
+        !publish.contains("x86_64-pc-windows-gnu"),
+        "publish-release.sh must not treat x86_64-pc-windows-gnu as the windows-x64 asset"
     );
 }

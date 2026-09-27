@@ -65,7 +65,11 @@ cc-switch update             # 下载并替换当前二进制
 scripts/publish-release.sh <tag>
 ```
 
-这个脚本按 WSL 环境写：Windows 侧的 zip 用 `cargo.exe` 打，找不到 `gh` 时回退到 `/mnt/c/Program Files/GitHub CLI/gh.exe`；换机器用 `WIN_CARGO` / `GH` 覆盖这两个路径。
+Linux musl 和 Windows x86_64 都在本机打。Windows zip 优先用 `cargo xwin` 交叉编译 `x86_64-pc-windows-msvc`；没有 cargo-xwin 时回退到 `WIN_CARGO` / `cargo.exe`（WSL）。找不到 `gh` 时回退到 `/mnt/c/Program Files/GitHub CLI/gh.exe`。
+
+Linux 上打 Windows 包需要：给 pinned 1.91.1 toolchain 加上 rustup target `x86_64-pc-windows-msvc`、`cargo install --locked cargo-xwin`，以及 clang / lld / llvm，并且 `clang-cl` 在 PATH 上。
+
+可选环境变量：`PUBLISH_WINDOWS=0` 跳过 Windows；`PUBLISH_LINUX=0` 跳过 musl；`PUBLISH_UPLOAD=0` 只打包不上传；`CC_SWITCH_WIN_BUILDER=xwin|cargo.exe` 强制选择 Windows 构建器；`WIN_CARGO` / `GH` 覆盖路径。
 
 ## 快速开始
 
