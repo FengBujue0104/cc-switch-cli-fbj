@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.11.3] - 2026-09-27
+
+### Fixed
+
+- Claude `settings.json` and Hermes `config.yaml` (and Hermes secret-bearing backups) are written via the private atomic path so new files are `0600` and an existing `0644` file is tightened on the next write (H1).
+- `config webdav show` and `config s3 show` mask stored passwords and access keys by default (same helper as `config show`); blank values stay N/A; opt-in `--reveal` prints the full stored value (H2).
+- After enabling WAL, `cc-switch.db-wal` / `cc-switch.db-shm` are chmod'd to `0600` on init and on import reopen so sidecars match the main DB on Unix (M2).
+
 ## [5.11.2] - 2026-09-27
 
 ### Changed

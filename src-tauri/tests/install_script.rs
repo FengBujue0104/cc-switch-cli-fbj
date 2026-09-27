@@ -7,8 +7,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use tempfile::TempDir;
 
-const RELEASE_TAG: &str = "v5.11.2";
-const LINUX_ASSET: &str = "cc-switch-cli-v5.11.2-linux-x64.tar.gz";
+const RELEASE_TAG: &str = "v5.11.3";
+const LINUX_ASSET: &str = "cc-switch-cli-v5.11.3-linux-x64.tar.gz";
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -156,7 +156,7 @@ case "$url" in
   */checksums.txt)
     if [ "${CC_SWITCH_TEST_BAD_CHECKSUM:-0}" = "1" ]; then
       printf '0000000000000000000000000000000000000000000000000000000000000000  %s\n' \
-        "cc-switch-cli-v5.11.2-linux-x64.tar.gz" > "${CC_SWITCH_TEST_LOG_DIR}/bad-checksums.txt"
+        "cc-switch-cli-v5.11.3-linux-x64.tar.gz" > "${CC_SWITCH_TEST_LOG_DIR}/bad-checksums.txt"
       respond "$output" "${CC_SWITCH_TEST_LOG_DIR}/bad-checksums.txt"
     else
       respond "$output" "${CC_SWITCH_TEST_CHECKSUMS_PATH}"
