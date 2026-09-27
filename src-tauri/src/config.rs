@@ -326,6 +326,14 @@ pub fn write_json_file<T: Serialize>(path: &Path, data: &T) -> Result<(), AppErr
     atomic_write(path, json.as_bytes())
 }
 
+/// 写入包含凭据的 JSON 配置文件。Unix 上新文件和替换文件始终使用 0600。
+pub fn write_json_file_private<T: Serialize>(path: &Path, data: &T) -> Result<(), AppError> {
+    let json =
+        serde_json::to_string_pretty(data).map_err(|e| AppError::JsonSerialize { source: e })?;
+
+    atomic_write_private(path, json.as_bytes())
+}
+
 /// 原子写入文本文件（用于 TOML/纯文本）
 pub fn write_text_file(path: &Path, data: &str) -> Result<(), AppError> {
     atomic_write(path, data.as_bytes())

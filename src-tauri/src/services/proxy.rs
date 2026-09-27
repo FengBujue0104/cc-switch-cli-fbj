@@ -19,7 +19,10 @@ use crate::{
         CLAUDE_SUBAGENT_MODEL_ENV_KEY,
     },
     codex_config::{get_codex_auth_path, get_codex_config_path},
-    config::{get_claude_settings_path, read_json_file, write_json_file, write_text_file},
+    config::{
+        get_claude_settings_path, read_json_file, write_json_file, write_json_file_private,
+        write_text_file,
+    },
     database::Database,
     gemini_config::{
         env_to_json, get_gemini_env_path, json_to_env, read_gemini_env, write_gemini_env_atomic,
@@ -3674,7 +3677,7 @@ impl ProxyService {
     }
 
     fn write_claude_live(&self, config: &Value) -> Result<(), String> {
-        write_json_file(&get_claude_settings_path(), config)
+        write_json_file_private(&get_claude_settings_path(), config)
             .map_err(|error| format!("write Claude settings.json failed: {error}"))
     }
 

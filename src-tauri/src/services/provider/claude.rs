@@ -246,6 +246,68 @@ impl ProviderService {
         let PreparedLiveWrite::Claude { settings } = prepared else {
             return Ok(());
         };
-        write_json_file(&get_claude_settings_path(), settings)
+        write_json_file_private(&get_claude_settings_path(), settings)
+    }
+}
+
+#[cfg(test)]
+mod live_write_permission_tests {
+    use super::*;
+    use crate::config::get_claude_settings_path;
+    use crate::test_support::TestEnvGuard;
+    use serde_json::json;
+    use std::fs;
+    use std::path::Path;
+
+    fn write_sample_live() -> Result<(), AppError> {
+        ProviderService::apply_claude_live_write(&PreparedLiveWrite::Claude {
+            settings: json!({
+                "env": { "ANTHROPIC_API_KEY": "sk-live-test-key" }
+            }),
+        })
+    }
+
+    #[cfg(unix)]
+    fn unix_mode(path: &Path) -> u32 {
+        use std::os::unix::fs::PermissionsExt;
+        fs::metadata(path)
+            .unwrap_or_else(|err| panic!("metadata {}: {err}", path.display()))
+            .permissions()
+            .mode()
+            & 0o777
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn apply_claude_live_write_creates_settings_with_mode_0600() {
+        let temp = tempfile::tempdir().expect("create temp dir");
+        let _env = TestEnvGuard::isolated(temp.path());
+
+        write_sample_live().expect("write claude live settings");
+
+        let path = get_claude_settings_path();
+        assert!(path.exists(), "live settings should be created");
+        assert_eq!(unix_mode(&path), 0o600);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn apply_claude_live_write_tightens_existing_0644_settings_to_0600() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::tempdir().expect("create temp dir");
+        let _env = TestEnvGuard::isolated(temp.path());
+
+        let path = get_claude_settings_path();
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).expect("create claude config dir");
+        }
+        fs::write(&path, "{}").expect("seed world-readable settings");
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644))
+            .expect("set insecure live settings mode");
+        assert_eq!(unix_mode(&path), 0o644);
+
+        write_sample_live().expect("rewrite claude live settings");
+        assert_eq!(unix_mode(&path), 0o600);
     }
 }

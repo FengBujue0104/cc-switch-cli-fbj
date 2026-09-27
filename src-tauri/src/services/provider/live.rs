@@ -5,7 +5,9 @@ use serde_json::Value;
 
 use crate::app_config::AppType;
 use crate::codex_config::{get_codex_auth_path, get_codex_config_path};
-use crate::config::{delete_file, get_claude_settings_path, read_json_file, write_json_file};
+use crate::config::{
+    delete_file, get_claude_settings_path, read_json_file, write_json_file, write_json_file_private,
+};
 use crate::error::AppError;
 use crate::provider::{Provider, ProviderMeta};
 use crate::store::AppState;
@@ -40,7 +42,7 @@ impl LiveSnapshot {
             LiveSnapshot::Claude { settings } => {
                 let path = get_claude_settings_path();
                 if let Some(value) = settings {
-                    write_json_file(&path, value)?;
+                    write_json_file_private(&path, value)?;
                 } else if path.exists() {
                     delete_file(&path)?;
                 }

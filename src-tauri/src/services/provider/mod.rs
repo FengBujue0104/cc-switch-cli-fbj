@@ -25,7 +25,7 @@ use crate::app_config::{AppType, MultiAppConfig};
 use crate::codex_config::{get_codex_auth_path, get_codex_config_path};
 use crate::config::{
     delete_file, get_claude_settings_path, get_provider_config_path, read_json_file,
-    write_json_file,
+    write_json_file, write_json_file_private,
 };
 use crate::error::AppError;
 use crate::provider::{Provider, ProviderMeta, UsageScript};

@@ -31,7 +31,9 @@
 //!     args: ["-y", "@modelcontextprotocol/server-filesystem"]
 //! ```
 
-use crate::config::{atomic_write, create_managed_config_dir_all, get_app_config_dir, home_dir};
+use crate::config::{
+    atomic_write, atomic_write_private, create_managed_config_dir_all, get_app_config_dir, home_dir,
+};
 use crate::error::AppError;
 use crate::services::provider::live_merge;
 use crate::settings::{effective_backup_retain_count, get_hermes_override_dir};
@@ -133,7 +135,7 @@ pub fn write_hermes_config_source(source: &str) -> Result<(), AppError> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| AppError::io(parent, e))?;
     }
-    atomic_write(&path, source.as_bytes())
+    atomic_write_private(&path, source.as_bytes())
 }
 
 /// Read the Hermes config file as `serde_yaml::Value`. Returns an empty
@@ -287,7 +289,7 @@ fn create_hermes_backup(source: &str) -> Result<PathBuf, AppError> {
         counter += 1;
     }
 
-    atomic_write(&backup_path, source.as_bytes())?;
+    atomic_write_private(&backup_path, source.as_bytes())?;
     cleanup_hermes_backups(&backup_dir)?;
     Ok(backup_path)
 }
@@ -365,7 +367,7 @@ fn write_yaml_section_to_config_locked(
         fs::create_dir_all(parent).map_err(|e| AppError::io(parent, e))?;
     }
 
-    atomic_write(&config_path, new_raw.as_bytes())?;
+    atomic_write_private(&config_path, new_raw.as_bytes())?;
 
     log::debug!(
         "Hermes config section '{}' written to {:?}",
@@ -1180,6 +1182,91 @@ custom_providers: []\n";
             assert!(text.contains("agent:"));
             assert!(text.contains("max_turns: 5"));
             assert!(text.contains("foo"));
+        });
+    }
+
+    #[cfg(unix)]
+    fn unix_mode(path: &Path) -> u32 {
+        use std::os::unix::fs::PermissionsExt;
+        fs::metadata(path)
+            .unwrap_or_else(|err| panic!("metadata {}: {err}", path.display()))
+            .permissions()
+            .mode()
+            & 0o777
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial(home_settings)]
+    fn write_hermes_config_source_creates_live_config_with_mode_0600() {
+        with_test_home(|| {
+            write_hermes_config_source("custom_providers:\n  - name: acme\n    api_key: sk-secret\n")
+                .unwrap();
+            let path = get_hermes_config_path();
+            assert!(path.exists(), "hermes live config should be created");
+            assert_eq!(unix_mode(&path), 0o600);
+        });
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial(home_settings)]
+    fn write_hermes_config_source_tightens_existing_0644_live_config_to_0600() {
+        with_test_home(|| {
+            use std::os::unix::fs::PermissionsExt;
+
+            let path = get_hermes_config_path();
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).unwrap();
+            }
+            fs::write(&path, "custom_providers: []\n").unwrap();
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+            assert_eq!(unix_mode(&path), 0o644);
+
+            write_hermes_config_source(
+                "custom_providers:\n  - name: acme\n    api_key: sk-secret\n",
+            )
+            .unwrap();
+            assert_eq!(unix_mode(&path), 0o600);
+        });
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial(home_settings)]
+    fn hermes_secret_bearing_backup_is_written_with_mode_0600() {
+        with_test_home(|| {
+            write_hermes_config_source(
+                "custom_providers:\n  - name: acme\n    api_key: sk-secret\n",
+            )
+            .unwrap();
+            set_provider(
+                "acme",
+                json!({
+                    "base_url": "https://example.com/v1",
+                    "api_key": "sk-secret-updated"
+                }),
+            )
+            .unwrap();
+
+            let backup_dir = get_app_config_dir().join("backups").join("hermes");
+            let backups: Vec<_> = fs::read_dir(&backup_dir)
+                .unwrap()
+                .filter_map(|entry| entry.ok())
+                .map(|entry| entry.path())
+                .filter(|path| {
+                    path.extension()
+                        .and_then(|ext| ext.to_str())
+                        .is_some_and(|ext| ext == "yaml" || ext == "yml")
+                })
+                .collect();
+            assert!(
+                !backups.is_empty(),
+                "section write should create a secret-bearing backup"
+            );
+            for path in backups {
+                assert_eq!(unix_mode(&path), 0o600, "{}", path.display());
+            }
         });
     }
 
