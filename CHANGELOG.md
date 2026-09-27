@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.11.1] - 2026-09-27
+
 ### Fixed
 
 - Provider command handlers (`provider add`, `import-live`, `use`, and the rest of `provider::execute`) reject retired harness ids (`gemini` / `opencode` / `openclaw`) instead of printing success and then dropping the row on `AppType::all()` persist.

@@ -6,7 +6,7 @@
 
 [中文](README.md) ｜ English
 
-[![Version](https://img.shields.io/badge/version-5.11.0-blue.svg)](https://github.com/FengBujue0104/cc-switch-cli-fbj/releases/tag/v5.11.0)
+[![Version](https://img.shields.io/badge/version-5.11.1-blue.svg)](https://github.com/FengBujue0104/cc-switch-cli-fbj/releases/tag/v5.11.1)
 [![Platform](https://img.shields.io/badge/platform-Windows%20x64%20%7C%20Linux%20x64-lightgrey.svg)](https://github.com/FengBujue0104/cc-switch-cli-fbj/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
@@ -55,7 +55,7 @@ cc-switch update --check     # read-only
 cc-switch update             # download and replace the current binary
 ```
 
-Updates come from [this repo's GitHub Releases](https://github.com/FengBujue0104/cc-switch-cli-fbj/releases), not upstream SaladDay. `cc-switch update` verifies SHA-256 from `checksums.txt` (or GitHub's asset digest). The latest tag is **v5.11.0**; anything on `5.10.6` or newer self-updates straight to it.
+Updates come from [this repo's GitHub Releases](https://github.com/FengBujue0104/cc-switch-cli-fbj/releases), not upstream SaladDay. `cc-switch update` verifies SHA-256 from `checksums.txt` (or GitHub's asset digest). The latest tag is **v5.11.1**; anything on `5.10.6` or newer self-updates straight to it.
 
 > Note: binaries compiled before `6c037571` (when this fork pointed `cc-switch update` at its own repo) still update from upstream `saladday/cc-switch-cli` — the fork's only earlier package, `v5.10.5-fbj.1`, is one of those. It reports its version as `5.10.5`, which is still upstream's latest release today, so it keeps saying "already latest"; the moment upstream ships something newer, those binaries will self-update to an upstream build. Reinstalling once with the command above moves them onto this repo's update channel.
 

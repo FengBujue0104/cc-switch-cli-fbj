@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.11.1] - 2026-09-27
+
+### Fixed
+
+- Provider command handlers (`provider add`, `import-live`, `use`, and the rest of `provider::execute`) reject retired harness ids (`gemini` / `opencode` / `openclaw`) instead of printing success and then dropping the row on `AppType::all()` persist.
+- Pi `?` help no longer advertises Claude/Codex temp-launch and failover keys. `config show` omits retired harness managers and the leftover `mcp` / `prompts` / `skills` stores (export is unchanged).
+- TUI docs and README hidden-command list match the four-item nav and leftover `provider` diagnostics (`speedtest` / `stream-check` / `fetch-models` / `quota` / `usage-query`).
+- `install.sh` requires `python3` to parse GitHub Releases JSON (no `grep tag_name` fallback). Startup visible-apps policy skips rewriting `settings.json` when it is already pinned.
+
 ## [5.11.0] - 2026-09-26
 
 Personal lightweight fork of CC-Switch CLI. README.md is the product contract.
