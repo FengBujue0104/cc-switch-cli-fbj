@@ -304,8 +304,6 @@ pub(super) fn nav_pane_width(theme: &super::theme::Theme) -> u16 {
 
     let max_text_width = NavItem::ALL
         .iter()
-        .chain(NavItem::OPENCLAW_ALL.iter())
-        .chain(NavItem::HERMES_ALL.iter())
         .flat_map(|item| {
             let (en, zh) = nav_label_variants(*item);
             [en, zh]

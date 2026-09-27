@@ -62,26 +62,11 @@ impl NavItem {
         NavItem::Exit,
     ];
 
-    pub const OPENCLAW_ALL: [NavItem; 4] = [
-        NavItem::Main,
-        NavItem::Providers,
-        NavItem::Settings,
-        NavItem::Exit,
-    ];
-
-    pub const HERMES_ALL: [NavItem; 4] = [
-        NavItem::Main,
-        NavItem::Providers,
-        NavItem::Settings,
-        NavItem::Exit,
-    ];
-
-    pub const PI_ALL: [NavItem; 4] = [
-        NavItem::Main,
-        NavItem::Providers,
-        NavItem::Settings,
-        NavItem::Exit,
-    ];
+    // Every app uses the same four-item nav; keep named aliases for callers
+    // that still branch on OpenClaw / Hermes / Pi.
+    pub const OPENCLAW_ALL: [NavItem; 4] = Self::ALL;
+    pub const HERMES_ALL: [NavItem; 4] = Self::ALL;
+    pub const PI_ALL: [NavItem; 4] = Self::ALL;
 
     pub fn all_for_app(app_type: &AppType) -> &'static [NavItem] {
         match app_type {

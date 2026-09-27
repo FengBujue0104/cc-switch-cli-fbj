@@ -168,10 +168,7 @@ class Paths:
     claude_dir: Path
     claude_mcp_path: Path
     codex_dir: Path
-    gemini_dir: Path
-    opencode_dir: Path
     hermes_dir: Path
-    openclaw_dir: Path
 
 
 @dataclass
@@ -243,13 +240,7 @@ def resolve_paths() -> Paths:
         )
         or (home / ".codex")
     )
-    gemini_dir = resolve_user_path(settings.get("geminiConfigDir"), home) or (home / ".gemini")
-    opencode_dir = (
-        resolve_user_path(settings.get("opencodeConfigDir"), home)
-        or (home / ".config" / "opencode")
-    )
     hermes_dir = resolve_user_path(settings.get("hermesConfigDir"), home) or (home / ".hermes")
-    openclaw_dir = resolve_user_path(settings.get("openclawConfigDir"), home) or (home / ".openclaw")
 
     return Paths(
         home=home,
@@ -259,10 +250,7 @@ def resolve_paths() -> Paths:
         claude_dir=claude_dir,
         claude_mcp_path=claude_mcp_path,
         codex_dir=codex_dir,
-        gemini_dir=gemini_dir,
-        opencode_dir=opencode_dir,
         hermes_dir=hermes_dir,
-        openclaw_dir=openclaw_dir,
     )
 
 
@@ -326,19 +314,9 @@ def snapshot_paths(paths: Paths) -> Snapshot:
         paths.codex_dir / "AGENTS.md",
         paths.codex_dir / "skills",
         paths.codex_dir / "sessions" / BENCH,
-        paths.gemini_dir / ".env",
-        paths.gemini_dir / "settings.json",
-        paths.gemini_dir / "GEMINI.md",
-        paths.gemini_dir / "skills",
-        paths.opencode_dir / "opencode.json",
-        paths.opencode_dir / "AGENTS.md",
-        paths.opencode_dir / "skills",
         paths.hermes_dir / "config.yaml",
         paths.hermes_dir / "AGENTS.md",
         paths.hermes_dir / "skills",
-        paths.openclaw_dir / "openclaw.json",
-        paths.openclaw_dir / "AGENTS.md",
-        paths.openclaw_dir / "skills",
     ]:
         snap.add(path)
     return snap
@@ -519,7 +497,7 @@ def ensure_tables(conn: sqlite3.Connection) -> None:
         except sqlite3.Error:
             pass
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
-    for app, retries in [("claude", 6), ("codex", 3), ("gemini", 5)]:
+    for app, retries in [("claude", 6), ("codex", 3), ("hermes", 5)]:
         conn.execute(
             """
             INSERT OR IGNORE INTO proxy_config

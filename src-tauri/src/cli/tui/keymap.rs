@@ -75,6 +75,7 @@ pub(crate) fn help_only(_: &super::app::App, _: &super::data::UiData) -> bool {
 /// `key_bar_items` this does not evaluate each binding's `shown` state, so
 /// the catalog lists a page's full key vocabulary regardless of the current
 /// selection.
+#[allow(dead_code)] // leftover catalogs for library pages outside the four-item nav
 pub(crate) fn help_items<I: Copy>(
     bindings: &[Binding<I>],
     app: &super::app::App,
@@ -358,6 +359,7 @@ pub(crate) mod mcp {
         super::key_bar_items(BINDINGS, app, data)
     }
 
+    #[allow(dead_code)] // MCP is a leftover library page, not in the four-item nav
     pub(crate) fn help_items(app: &App, data: &UiData) -> Vec<(&'static str, &'static str)> {
         super::help_items(BINDINGS, app, data)
     }
@@ -433,6 +435,7 @@ pub(crate) mod prompts {
         super::key_bar_items(BINDINGS, app, data)
     }
 
+    #[allow(dead_code)] // Prompts is a leftover library page, not in the four-item nav
     pub(crate) fn help_items(app: &App, data: &UiData) -> Vec<(&'static str, &'static str)> {
         super::help_items(BINDINGS, app, data)
     }
@@ -540,6 +543,7 @@ pub(crate) mod skills_installed {
         super::key_bar_items(BINDINGS, app, data)
     }
 
+    #[allow(dead_code)] // Skills is a leftover library page, not in the four-item nav
     pub(crate) fn help_items(app: &App, data: &UiData) -> Vec<(&'static str, &'static str)> {
         super::help_items(BINDINGS, app, data)
     }
@@ -672,6 +676,7 @@ pub(crate) mod usage {
         super::key_bar_items(BINDINGS, app, data)
     }
 
+    #[allow(dead_code)] // Usage is a leftover library page, not in the four-item nav
     pub(crate) fn help_items(app: &App, data: &UiData) -> Vec<(&'static str, &'static str)> {
         super::help_items(BINDINGS, app, data)
             .into_iter()
@@ -748,6 +753,7 @@ pub(crate) mod sessions {
         super::key_bar_items(BINDINGS, app, data)
     }
 
+    #[allow(dead_code)] // Sessions is a leftover library page, not in the four-item nav
     pub(crate) fn help_items(app: &App, data: &UiData) -> Vec<(&'static str, &'static str)> {
         super::help_items(BINDINGS, app, data)
     }
