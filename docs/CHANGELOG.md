@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.11.2] - 2026-09-27
+
+### Changed
+
+- `scripts/publish-release.sh` prefers `cargo xwin` for the Windows MSVC zip on Linux hosts (keeps `WIN_CARGO` / `cargo.exe` WSL fallback). Adds `PUBLISH_LINUX` / `PUBLISH_UPLOAD` / `CC_SWITCH_WIN_BUILDER` knobs.
+- Benchmark harness no longer snapshots retired `.gemini` / `.opencode` / `.openclaw` fixtures.
+
+### Fixed
+
+- Unused MCP / Skills / Sessions / Usage keymap `help_items` are allowed as dead code instead of resurrecting those pages; duplicate `NavItem` nav lists alias to `ALL`.
+
 ## [5.11.1] - 2026-09-27
 
 ### Fixed

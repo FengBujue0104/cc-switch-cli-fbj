@@ -6,7 +6,7 @@
 
 中文 ｜ [English](README_EN.md)
 
-[![Version](https://img.shields.io/badge/version-5.11.1-blue.svg)](https://github.com/FengBujue0104/cc-switch-cli-fbj/releases/tag/v5.11.1)
+[![Version](https://img.shields.io/badge/version-5.11.2-blue.svg)](https://github.com/FengBujue0104/cc-switch-cli-fbj/releases/tag/v5.11.2)
 [![Platform](https://img.shields.io/badge/platform-Windows%20x64%20%7C%20Linux%20x64-lightgrey.svg)](https://github.com/FengBujue0104/cc-switch-cli-fbj/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
@@ -55,7 +55,7 @@ cc-switch update --check     # 只看，不动文件
 cc-switch update             # 下载并替换当前二进制
 ```
 
-更新源是[本仓库的 GitHub Releases](https://github.com/FengBujue0104/cc-switch-cli-fbj/releases)，不是上游 SaladDay；`cc-switch update` 会用 `checksums.txt`（或 GitHub 资源 digest）校验 SHA-256。当前最新标签 **v5.11.1**，`5.10.6` 及以上可以直接自更新过来。
+更新源是[本仓库的 GitHub Releases](https://github.com/FengBujue0104/cc-switch-cli-fbj/releases)，不是上游 SaladDay；`cc-switch update` 会用 `checksums.txt`（或 GitHub 资源 digest）校验 SHA-256。当前最新标签 **v5.11.2**，`5.10.6` 及以上可以直接自更新过来。
 
 > 注意：如果当前安装的二进制编译于 `6c037571` 之前（即本 fork 把 `cc-switch update` 指向自己仓库之前），它的更新源仍是上游 `saladday/cc-switch-cli`——本 fork 唯一的早期包 `v5.10.5-fbj.1` 就属于这种情况。它报的版本号是 `5.10.5`，而上游最新目前也还是 `5.10.5`，所以它现在会一直显示「已是最新」；上游哪天发了更新的版本，它就会直接被更新成上游的构建。用上面的安装命令重装一次，即可切入本仓库的更新通道。
 
