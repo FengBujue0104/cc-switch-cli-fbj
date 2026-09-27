@@ -88,3 +88,128 @@ fn config_show_masks_seeded_api_key() {
         );
     }
 }
+
+const WEBDAV_PASSWORD: &str = "super-secret-webdav-password-9999";
+const S3_ACCESS_KEY_ID: &str = "AKIAEXAMPLEKEYID99";
+const S3_SECRET_ACCESS_KEY: &str = "wJalrXUtnFEMI/K7MDENG";
+
+fn seed_webdav(home: &Path) {
+    assert_success(&run_cc_switch(
+        home,
+        &[
+            "config",
+            "webdav",
+            "set",
+            "--base-url",
+            "https://dav.example.com/root",
+            "--username",
+            "demo",
+            "--password",
+            WEBDAV_PASSWORD,
+            "--enable",
+        ],
+    ));
+}
+
+fn seed_s3(home: &Path) {
+    assert_success(&run_cc_switch(
+        home,
+        &[
+            "config",
+            "s3",
+            "set",
+            "--region",
+            "us-east-1",
+            "--bucket",
+            "demo-bucket",
+            "--access-key-id",
+            S3_ACCESS_KEY_ID,
+            "--secret-access-key",
+            S3_SECRET_ACCESS_KEY,
+            "--enable",
+        ],
+    ));
+}
+
+#[test]
+#[serial]
+fn config_webdav_show_masks_password_by_default() {
+    let _lock = lock_test_mutex();
+    reset_test_fs();
+    let home = ensure_test_home();
+    seed_webdav(home);
+
+    let show = assert_success(&run_cc_switch(home, &["config", "webdav", "show"]));
+    assert!(
+        !show.contains(WEBDAV_PASSWORD),
+        "webdav show must not print the raw password: {show}"
+    );
+    assert!(
+        show.contains("********9999"),
+        "webdav show should print the masked password form: {show}"
+    );
+}
+
+#[test]
+#[serial]
+fn config_webdav_show_reveal_prints_full_password() {
+    let _lock = lock_test_mutex();
+    reset_test_fs();
+    let home = ensure_test_home();
+    seed_webdav(home);
+
+    let show = assert_success(&run_cc_switch(
+        home,
+        &["config", "webdav", "show", "--reveal"],
+    ));
+    assert!(
+        show.contains(WEBDAV_PASSWORD),
+        "webdav show --reveal should print the stored password: {show}"
+    );
+}
+
+#[test]
+#[serial]
+fn config_s3_show_masks_access_keys_by_default() {
+    let _lock = lock_test_mutex();
+    reset_test_fs();
+    let home = ensure_test_home();
+    seed_s3(home);
+
+    let show = assert_success(&run_cc_switch(home, &["config", "s3", "show"]));
+    assert!(
+        !show.contains(S3_ACCESS_KEY_ID),
+        "s3 show must not print the raw access key id: {show}"
+    );
+    assert!(
+        !show.contains(S3_SECRET_ACCESS_KEY),
+        "s3 show must not print the raw secret access key: {show}"
+    );
+    assert!(
+        show.contains("********ID99"),
+        "s3 show should print the masked access key id: {show}"
+    );
+    assert!(
+        show.contains("********DENG"),
+        "s3 show should print the masked secret access key: {show}"
+    );
+}
+
+#[test]
+#[serial]
+fn config_s3_show_reveal_prints_full_access_keys() {
+    let _lock = lock_test_mutex();
+    reset_test_fs();
+    let home = ensure_test_home();
+    seed_s3(home);
+
+    let show = assert_success(&run_cc_switch(home, &["config", "s3", "show", "--reveal"]));
+    assert!(
+        show.contains(S3_ACCESS_KEY_ID),
+        "s3 show --reveal should print the stored access key id: {show}"
+    );
+    assert!(
+        show.contains(S3_SECRET_ACCESS_KEY),
+        "s3 show --reveal should print the stored secret access key: {show}"
+    );
+}

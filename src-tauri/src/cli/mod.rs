@@ -1457,9 +1457,21 @@ mod tests {
 
         match cli.command {
             Some(Commands::Config(super::commands::config::ConfigCommand::WebDav(
-                super::commands::config_webdav::WebDavCommand::Show,
+                super::commands::config_webdav::WebDavCommand::Show { reveal: false },
             ))) => {}
             _ => panic!("expected config webdav show command"),
+        }
+    }
+
+    #[test]
+    fn parses_config_webdav_show_reveal_flag() {
+        let cli = Cli::parse_from(["cc-switch", "config", "webdav", "show", "--reveal"]);
+
+        match cli.command {
+            Some(Commands::Config(super::commands::config::ConfigCommand::WebDav(
+                super::commands::config_webdav::WebDavCommand::Show { reveal: true },
+            ))) => {}
+            _ => panic!("expected config webdav show --reveal command"),
         }
     }
 
@@ -1516,9 +1528,21 @@ mod tests {
 
         match cli.command {
             Some(Commands::Config(super::commands::config::ConfigCommand::S3(
-                super::commands::config_s3::S3Command::Show,
+                super::commands::config_s3::S3Command::Show { reveal: false },
             ))) => {}
             _ => panic!("expected config s3 show command"),
+        }
+    }
+
+    #[test]
+    fn parses_config_s3_show_reveal_flag() {
+        let cli = Cli::parse_from(["cc-switch", "config", "s3", "show", "--reveal"]);
+
+        match cli.command {
+            Some(Commands::Config(super::commands::config::ConfigCommand::S3(
+                super::commands::config_s3::S3Command::Show { reveal: true },
+            ))) => {}
+            _ => panic!("expected config s3 show --reveal command"),
         }
     }
 

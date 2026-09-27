@@ -1,6 +1,6 @@
 use clap::Subcommand;
 
-use crate::cli::ui::{highlight, info, success, warning};
+use crate::cli::ui::{highlight, info, mask_secret_for_display, success, warning};
 use crate::error::AppError;
 use crate::{
     get_webdav_sync_settings, set_webdav_sync_settings, webdav_jianguoyun_preset,
@@ -10,7 +10,11 @@ use crate::{
 #[derive(Subcommand, Debug, Clone)]
 pub enum WebDavCommand {
     /// Show current WebDAV sync settings
-    Show,
+    Show {
+        /// Print stored secrets in full instead of masking them
+        #[arg(long)]
+        reveal: bool,
+    },
 
     /// Create or update WebDAV sync settings
     Set {
@@ -81,7 +85,7 @@ pub enum WebDavCommand {
 
 pub fn execute(cmd: WebDavCommand) -> Result<(), AppError> {
     match cmd {
-        WebDavCommand::Show => show(),
+        WebDavCommand::Show { reveal } => show(reveal),
         WebDavCommand::Set {
             base_url,
             remote_root,
@@ -126,46 +130,45 @@ pub fn execute(cmd: WebDavCommand) -> Result<(), AppError> {
     }
 }
 
-fn show() -> Result<(), AppError> {
+fn show(reveal: bool) -> Result<(), AppError> {
+    print!("{}", format_show(reveal)?);
+    Ok(())
+}
+
+fn format_show(reveal: bool) -> Result<String, AppError> {
     let Some(settings) = get_webdav_sync_settings() else {
-        println!(
-            "{}",
+        return Ok(format!(
+            "{}\n",
             info(crate::t!(
                 "WebDAV sync is not configured.",
                 "WebDAV 同步尚未配置。"
             ))
-        );
-        return Ok(());
+        ));
     };
 
-    println!("{}", highlight(crate::t!("WebDAV Sync", "WebDAV 同步")));
-    println!("{}", "═".repeat(60));
-    println!("Enabled:      {}", yes_no(settings.enabled));
-    println!("Base URL:     {}", settings.base_url);
-    println!("Remote Root:  {}", settings.remote_root);
-    println!("Profile:      {}", settings.profile);
-    println!("Username:     {}", blank_as_na(&settings.username));
-    println!("Password:     {}", blank_as_na(&settings.password));
-    println!("Auto Sync:    {}", yes_no(settings.auto_sync));
-    println!(
-        "Last Sync:    {}",
+    Ok(format!(
+        "{}\n{}\nEnabled:      {}\nBase URL:     {}\nRemote Root:  {}\nProfile:      {}\nUsername:     {}\nPassword:     {}\nAuto Sync:    {}\nLast Sync:    {}\nLast Error:   {}\n",
+        highlight(crate::t!("WebDAV Sync", "WebDAV 同步")),
+        "═".repeat(60),
+        yes_no(settings.enabled),
+        settings.base_url,
+        settings.remote_root,
+        settings.profile,
+        blank_as_na(&settings.username),
+        secret_for_show(&settings.password, reveal),
+        yes_no(settings.auto_sync),
         settings
             .status
             .last_sync_at
             .map(|value| value.to_string())
-            .unwrap_or_else(|| "N/A".to_string())
-    );
-    println!(
-        "Last Error:   {}",
+            .unwrap_or_else(|| "N/A".to_string()),
         settings
             .status
             .last_error
             .clone()
             .filter(|value| !value.trim().is_empty())
-            .unwrap_or_else(|| "N/A".to_string())
-    );
-
-    Ok(())
+            .unwrap_or_else(|| "N/A".to_string()),
+    ))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -353,10 +356,25 @@ fn blank_as_na(value: &str) -> &str {
     }
 }
 
+fn secret_for_show(value: &str, reveal: bool) -> String {
+    if blank_as_na(value) == "N/A" {
+        "N/A".to_string()
+    } else if reveal {
+        value.trim().to_string()
+    } else {
+        mask_secret_for_display(value)
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::merged_settings;
-    use crate::{WebDavSyncSettings, WebDavSyncStatus};
+    use super::{format_show, merged_settings};
+    use crate::cli::ui::mask_secret_for_display;
+    use crate::test_support::TestEnvGuard;
+    use crate::{set_webdav_sync_settings, WebDavSyncSettings, WebDavSyncStatus};
+    use serial_test::serial;
+
+    const WEBDAV_PASSWORD: &str = "super-secret-webdav-password-9999";
 
     #[test]
     fn merged_settings_updates_selected_fields_only() {
@@ -395,5 +413,72 @@ mod tests {
         assert_eq!(merged.password, "secret");
         assert!(merged.auto_sync);
         assert_eq!(merged.status.last_error.as_deref(), Some("boom"));
+    }
+
+    fn seed_webdav(password: &str) {
+        set_webdav_sync_settings(Some(WebDavSyncSettings {
+            enabled: true,
+            base_url: "https://dav.example.com/root".to_string(),
+            remote_root: "sync-root".to_string(),
+            profile: "default".to_string(),
+            username: "demo".to_string(),
+            password: password.to_string(),
+            auto_sync: false,
+            status: WebDavSyncStatus::default(),
+        }))
+        .expect("save webdav settings");
+    }
+
+    #[test]
+    #[serial(home_settings)]
+    fn show_masks_password_by_default() {
+        let temp = tempfile::tempdir().expect("create temp dir");
+        let _env = TestEnvGuard::isolated(temp.path());
+        seed_webdav(WEBDAV_PASSWORD);
+
+        let out = format_show(false).expect("format webdav show");
+        let masked = mask_secret_for_display(WEBDAV_PASSWORD);
+        assert!(
+            !out.contains(WEBDAV_PASSWORD),
+            "default show must not print the raw password: {out}"
+        );
+        assert!(
+            out.contains(&masked),
+            "default show should print the masked password {masked}: {out}"
+        );
+        assert!(out.contains("Password:"));
+    }
+
+    #[test]
+    #[serial(home_settings)]
+    fn show_reveal_prints_full_password() {
+        let temp = tempfile::tempdir().expect("create temp dir");
+        let _env = TestEnvGuard::isolated(temp.path());
+        seed_webdav(WEBDAV_PASSWORD);
+
+        let out = format_show(true).expect("format webdav show --reveal");
+        assert!(
+            out.contains(WEBDAV_PASSWORD),
+            "--reveal should print the stored password: {out}"
+        );
+    }
+
+    #[test]
+    #[serial(home_settings)]
+    fn show_prints_na_for_blank_password() {
+        let temp = tempfile::tempdir().expect("create temp dir");
+        let _env = TestEnvGuard::isolated(temp.path());
+        seed_webdav("");
+
+        let out = format_show(false).expect("format webdav show");
+        assert!(
+            out.contains("Password:     N/A"),
+            "blank password should display N/A: {out}"
+        );
+        let revealed = format_show(true).expect("format webdav show --reveal");
+        assert!(
+            revealed.contains("Password:     N/A"),
+            "blank password stays N/A even with --reveal: {revealed}"
+        );
     }
 }
