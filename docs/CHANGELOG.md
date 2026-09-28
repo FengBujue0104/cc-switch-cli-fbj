@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.12.2] - 2026-09-28
+
+### Changed
+
+- **Codex 切换提示 / switch toast:** 成功切换与相关 `/model` 目录帮助文案现明确要求**结束整个 codex 进程**后再开；仅重开终端或通过 `codex agents` 停任务不够。SSH 远程项目仍需重新连接。
+- Codex switch-success toast and related `/model` catalog help now say you must **fully quit the Codex process**, then reopen; reopening the terminal or stopping tasks via `codex agents` is not enough. SSH reconnect note retained.
+
 ## [5.12.1] - 2026-09-28
 
 ### Fixed
