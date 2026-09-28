@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.12.0] - 2026-09-28
+
+### Changed
+
+- **Default data directory:** `~/.cc-switch` → `~/.cc-switch-fbj` (Windows: `%USERPROFILE%\.cc-switch-fbj`), isolating this fork from the upstream GUI shared DB. Override with `CC_SWITCH_CONFIG_DIR`. DB filename remains `cc-switch.db` inside the directory.
+- **Schema 19:** Port upstream GUI 18→19 migration (`enabled_mcode` on `mcp_servers` / `skills`). Slim CLI does not write that column, so GUI MiniMax toggles are preserved when a DB is shared or copied.
+- On first open, if the new default dir has no DB and legacy `~/.cc-switch/cc-switch.db` exists, auto-**copy** (not move) the DB plus safe sidecars (`settings.json`, `skills.json`, `config.json*`, `skills/`, `backups/`, WAL/SHM) and write `.imported-from-cc-switch`. Manual: `cc-switch config import-from-legacy`. Refuse import when legacy `user_version` > supported schema. Opt out of auto-import with `CC_SWITCH_IMPORT_LEGACY=0`.
+- `future_schema_error` now mentions the fork-specific default path and urges backup (not delete).
+
+### Notes
+
+- User will cut the GitHub Release later; this branch only prepares 5.12.0.
+
 ## [5.11.3] - 2026-09-27
 
 ### Fixed

@@ -63,7 +63,7 @@ Key Rust entry points:
 
 ## State and configuration model
 
-CC-Switch stores core state in SQLite at `~/.cc-switch/cc-switch.db` by default, or under `$CC_SWITCH_CONFIG_DIR/cc-switch.db` when `CC_SWITCH_CONFIG_DIR` is set. `~/.cc-switch/settings.json` stores app settings. `~/.cc-switch/backups/` holds rotating backups.
+CC-Switch stores core state in SQLite at `~/.cc-switch-fbj/cc-switch.db` by default, or under `$CC_SWITCH_CONFIG_DIR/cc-switch.db` when `CC_SWITCH_CONFIG_DIR` is set. `~/.cc-switch-fbj/settings.json` stores app settings. `~/.cc-switch-fbj/backups/` holds rotating backups.
 
 Legacy `config.json` and `skills.json` are migration/import sources only. `AppState::try_new()` validates and migrates legacy files into SQLite when needed. `AppState::try_new_with_startup_recovery()` also imports live provider configs and recovers proxy takeovers when needed. `AppState::save()` persists the in-memory snapshot back to SQLite.
 

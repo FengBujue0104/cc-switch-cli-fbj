@@ -92,12 +92,42 @@ pub fn get_claude_settings_path() -> PathBuf {
     settings
 }
 
-/// 获取应用配置目录路径（默认 $HOME/.cc-switch，可由 CC_SWITCH_CONFIG_DIR 覆盖）
+/// Fork-specific default config directory name (isolated from upstream GUI).
+pub const DEFAULT_APP_CONFIG_DIR_NAME: &str = ".cc-switch-fbj";
+
+/// Upstream GUI / pre-5.12 fbj default config directory name.
+pub const LEGACY_UPSTREAM_CONFIG_DIR_NAME: &str = ".cc-switch";
+
+/// Marker written after a one-shot copy from the legacy upstream directory.
+pub const LEGACY_IMPORT_MARKER: &str = ".imported-from-cc-switch";
+
+fn default_app_config_dir() -> PathBuf {
+    home_dir()
+        .expect("无法获取用户主目录")
+        .join(DEFAULT_APP_CONFIG_DIR_NAME)
+}
+
+/// Legacy upstream config dir (`~/.cc-switch`), used only for one-shot import detection.
+pub fn legacy_upstream_config_dir() -> PathBuf {
+    home_dir()
+        .expect("无法获取用户主目录")
+        .join(LEGACY_UPSTREAM_CONFIG_DIR_NAME)
+}
+
+/// True when `CC_SWITCH_CONFIG_DIR` is unset or blank (i.e. using the compiled default).
+pub fn is_using_default_app_config_dir() -> bool {
+    match env::var_os("CC_SWITCH_CONFIG_DIR") {
+        None => true,
+        Some(value) => value.to_string_lossy().trim().is_empty(),
+    }
+}
+
+/// 获取应用配置目录路径（默认 $HOME/.cc-switch-fbj，可由 CC_SWITCH_CONFIG_DIR 覆盖）
 pub fn get_app_config_dir() -> PathBuf {
     if let Some(custom) = env::var_os("CC_SWITCH_CONFIG_DIR") {
         let custom = PathBuf::from(custom);
         if custom.to_string_lossy().trim().is_empty() {
-            return home_dir().expect("无法获取用户主目录").join(".cc-switch");
+            return default_app_config_dir();
         }
         return custom;
     }
@@ -107,13 +137,13 @@ pub fn get_app_config_dir() -> PathBuf {
     //     return custom;
     // }
 
-    home_dir().expect("无法获取用户主目录").join(".cc-switch")
+    default_app_config_dir()
 }
 
 /// 校验 CC_SWITCH_CONFIG_DIR 是否为安全的应用专属目录
 ///
 /// 拒绝系统关键目录（如 `/`、`/etc`、`/usr` 等），防止下游权限操作破坏系统。
-/// 未设置环境变量时默认路径 `~/.cc-switch` 始终安全，直接放行。
+/// 未设置环境变量时默认路径 `~/.cc-switch-fbj` 始终安全，直接放行。
 pub fn validate_config_dir() -> Result<(), AppError> {
     let path = get_app_config_dir();
     let resolved = resolve_config_dir_without_following_user_symlinks(&path)?;
@@ -860,14 +890,14 @@ mod tests {
     }
 
     #[test]
-    fn get_app_config_dir_defaults_to_home_dot_cc_switch() {
+    fn get_app_config_dir_defaults_to_home_dot_cc_switch_fbj() {
         let _guard = lock_test_home_and_settings();
         let _env = ConfigDirEnvGuard::new("CC_SWITCH_CONFIG_DIR", None);
         set_test_home_override(Some(Path::new("/tmp/cc-switch-home-default")));
 
         assert_eq!(
             get_app_config_dir(),
-            PathBuf::from("/tmp/cc-switch-home-default").join(".cc-switch")
+            PathBuf::from("/tmp/cc-switch-home-default").join(".cc-switch-fbj")
         );
 
         set_test_home_override(None);
@@ -898,11 +928,82 @@ mod tests {
 
         assert_eq!(
             get_app_config_dir(),
-            PathBuf::from("/tmp/cc-switch-home-blank").join(".cc-switch")
+            PathBuf::from("/tmp/cc-switch-home-blank").join(".cc-switch-fbj")
         );
 
         set_test_home_override(None);
     }
+
+    #[test]
+    fn legacy_import_copies_db_and_settings_once() {
+        use rusqlite::Connection;
+        let _guard = lock_test_home_and_settings();
+        let home = tempfile::tempdir().expect("home");
+        let _env = ConfigDirEnvGuard::new("CC_SWITCH_CONFIG_DIR", None);
+        let _import_env = ConfigDirEnvGuard::new("CC_SWITCH_IMPORT_LEGACY", None);
+        set_test_home_override(Some(home.path()));
+
+        let legacy = home.path().join(".cc-switch");
+        std::fs::create_dir_all(&legacy).expect("legacy dir");
+        let legacy_db = legacy.join("cc-switch.db");
+        {
+            let conn = Connection::open(&legacy_db).expect("create legacy db");
+            conn.execute_batch("PRAGMA user_version = 18;").expect("set version");
+        }
+        std::fs::write(legacy.join("settings.json"), b"{\"theme\":\"dark\"}").expect("settings");
+
+        let outcome = import_from_legacy_config_dir(19, false, true).expect("import");
+        match outcome {
+            LegacyImportOutcome::Imported { copied, .. } => {
+                assert!(copied.iter().any(|n| n == "cc-switch.db"));
+                assert!(copied.iter().any(|n| n == "settings.json"));
+            }
+            other => panic!("expected Imported, got {other:?}"),
+        }
+        let target = home.path().join(".cc-switch-fbj");
+        assert!(target.join("cc-switch.db").exists());
+        assert!(target.join("settings.json").exists());
+        assert!(target.join(".imported-from-cc-switch").exists());
+        // legacy untouched
+        assert!(legacy_db.exists());
+
+        let second = import_from_legacy_config_dir(19, false, true).expect("second");
+        assert!(matches!(
+            second,
+            LegacyImportOutcome::Skipped(_)
+        ));
+
+        set_test_home_override(None);
+    }
+
+    #[test]
+    fn legacy_import_refuses_future_schema() {
+        use rusqlite::Connection;
+        let _guard = lock_test_home_and_settings();
+        let home = tempfile::tempdir().expect("home");
+        let _env = ConfigDirEnvGuard::new("CC_SWITCH_CONFIG_DIR", None);
+        set_test_home_override(Some(home.path()));
+
+        let legacy = home.path().join(".cc-switch");
+        std::fs::create_dir_all(&legacy).expect("legacy dir");
+        {
+            let conn = Connection::open(legacy.join("cc-switch.db")).expect("db");
+            conn.execute_batch("PRAGMA user_version = 20;").expect("v20");
+        }
+
+        let outcome = import_from_legacy_config_dir(19, false, true).expect("check");
+        assert!(matches!(
+            outcome,
+            LegacyImportOutcome::RefusedFutureSchema {
+                version: 20,
+                max_supported: 19
+            }
+        ));
+        assert!(!home.path().join(".cc-switch-fbj/cc-switch.db").exists());
+
+        set_test_home_override(None);
+    }
+
 
     #[test]
     fn get_claude_config_dir_respects_env_var() {
@@ -1357,6 +1458,219 @@ mod tests {
             !external_parent.join("cc-switch/settings.json").exists(),
             "write must not follow the symlinked parent from the raw path"
         );
+    }
+}
+
+/// Outcome of a one-shot legacy-directory import attempt.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LegacyImportOutcome {
+    /// Nothing to do (env override, already imported, no legacy DB, etc.).
+    Skipped(&'static str),
+    /// Copied legacy files into the new default directory.
+    Imported {
+        from: PathBuf,
+        to: PathBuf,
+        copied: Vec<String>,
+    },
+    /// Legacy DB schema is newer than this build supports; refused to copy.
+    RefusedFutureSchema { version: i32, max_supported: i32 },
+}
+
+fn legacy_db_is_absent_or_empty(db_path: &Path) -> bool {
+    match fs::metadata(db_path) {
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => true,
+        Err(_) => false,
+        Ok(meta) => meta.len() == 0,
+    }
+}
+
+fn auto_legacy_import_disabled() -> bool {
+    match env::var("CC_SWITCH_IMPORT_LEGACY") {
+        Ok(value) => {
+            let v = value.trim().to_ascii_lowercase();
+            matches!(v.as_str(), "0" | "false" | "no" | "off")
+        }
+        Err(_) => false,
+    }
+}
+
+fn read_sqlite_user_version(db_path: &Path) -> Result<i32, AppError> {
+    use rusqlite::{Connection, OpenFlags};
+    let flags = OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX;
+    let conn = Connection::open_with_flags(db_path, flags)
+        .map_err(|e| AppError::Database(format!("打开遗留数据库失败 ({}): {e}", db_path.display())))?;
+    conn.query_row("PRAGMA user_version;", [], |row| row.get(0))
+        .map_err(|e| AppError::Database(format!("读取遗留数据库 user_version 失败: {e}")))
+}
+
+fn copy_path_recursive(src: &Path, dest: &Path) -> Result<(), AppError> {
+    let meta = fs::symlink_metadata(src).map_err(|e| AppError::io(src, e))?;
+    if meta.file_type().is_symlink() {
+        return Err(AppError::InvalidInput(format!(
+            "拒绝复制符号链接: {}",
+            src.display()
+        )));
+    }
+    if meta.is_dir() {
+        create_managed_config_dir_all(dest)?;
+        for entry in fs::read_dir(src).map_err(|e| AppError::io(src, e))? {
+            let entry = entry.map_err(|e| AppError::io(src, e))?;
+            let name = entry.file_name();
+            copy_path_recursive(&entry.path(), &dest.join(name))?;
+        }
+        Ok(())
+    } else if meta.is_file() {
+        if let Some(parent) = dest.parent() {
+            create_managed_config_dir_all(parent)?;
+        }
+        copy_file(src, dest)
+    } else {
+        Ok(())
+    }
+}
+
+/// Files/directories safely copied from a legacy `~/.cc-switch` tree.
+fn legacy_import_candidates(legacy_dir: &Path) -> Vec<(PathBuf, &'static str)> {
+    let names = [
+        "cc-switch.db",
+        "cc-switch.db-wal",
+        "cc-switch.db-shm",
+        "settings.json",
+        "skills.json",
+        "config.json",
+        "config.json.bak",
+        "skills",
+        "backups",
+    ];
+    names
+        .into_iter()
+        .map(|name| (legacy_dir.join(name), name))
+        .filter(|(path, _)| path.exists())
+        .collect()
+}
+
+/// One-shot copy from `~/.cc-switch` into the active / default fbj config dir.
+///
+/// `auto_mode`:
+/// - requires compiled default dir (`CC_SWITCH_CONFIG_DIR` unset/blank)
+/// - respects `CC_SWITCH_IMPORT_LEGACY=0`
+/// - skips when marker exists or target DB already present
+///
+/// Manual CLI (`auto_mode = false`) targets `get_app_config_dir()` and may use `force`
+/// to ignore the marker (still never overwrites an existing target DB).
+pub fn import_from_legacy_config_dir(
+    max_schema_version: i32,
+    force: bool,
+    auto_mode: bool,
+) -> Result<LegacyImportOutcome, AppError> {
+    if auto_mode && !is_using_default_app_config_dir() {
+        return Ok(LegacyImportOutcome::Skipped(
+            "CC_SWITCH_CONFIG_DIR is set; skipping legacy import",
+        ));
+    }
+    if auto_mode && auto_legacy_import_disabled() {
+        return Ok(LegacyImportOutcome::Skipped(
+            "CC_SWITCH_IMPORT_LEGACY disables auto import",
+        ));
+    }
+
+    let target_dir = if auto_mode {
+        default_app_config_dir()
+    } else {
+        get_app_config_dir()
+    };
+    let legacy_dir = legacy_upstream_config_dir();
+    let legacy_db = legacy_dir.join("cc-switch.db");
+    let target_db = target_dir.join("cc-switch.db");
+    let marker = target_dir.join(LEGACY_IMPORT_MARKER);
+
+    if !legacy_db.exists() {
+        return Ok(LegacyImportOutcome::Skipped(
+            "legacy ~/.cc-switch/cc-switch.db not found",
+        ));
+    }
+    if !force && marker.exists() {
+        return Ok(LegacyImportOutcome::Skipped(
+            "legacy import marker already present",
+        ));
+    }
+    if !force && !legacy_db_is_absent_or_empty(&target_db) {
+        return Ok(LegacyImportOutcome::Skipped(
+            "target cc-switch.db already exists",
+        ));
+    }
+    if force && !legacy_db_is_absent_or_empty(&target_db) {
+        return Err(AppError::InvalidInput(format!(
+            "目标数据库已存在，拒绝覆盖: {}\n请先备份并移走该文件后再导入。",
+            target_db.display()
+        )));
+    }
+
+    let version = read_sqlite_user_version(&legacy_db)?;
+    if version > max_schema_version {
+        let msg = format!(
+            "遗留目录 {} 的数据库版本为 {version}，高于本应用支持的 {max_schema_version}。\n\
+             已跳过自动导入，以免打开失败。请在上游 GUI 中导出供应商，或升级本 CLI 后再试。\n\
+             上游目录保持不动；本 fork 默认目录为 {}。",
+            legacy_dir.display(),
+            target_dir.display()
+        );
+        eprintln!("{msg}");
+        log::warn!("{msg}");
+        return Ok(LegacyImportOutcome::RefusedFutureSchema {
+            version,
+            max_supported: max_schema_version,
+        });
+    }
+
+    create_managed_config_dir_all(&target_dir)?;
+    let mut copied = Vec::new();
+    for (src, name) in legacy_import_candidates(&legacy_dir) {
+        let dest = target_dir.join(name);
+        copy_path_recursive(&src, &dest)?;
+        copied.push(name.to_string());
+    }
+
+    let notice = format!(
+        "已从 {} 复制配置到 {}（{}）。\n\
+         上游 GUI 仍使用 {}；两边从此分叉。标记文件: {}",
+        legacy_dir.display(),
+        target_dir.display(),
+        copied.join(", "),
+        legacy_dir.display(),
+        marker.display()
+    );
+    eprintln!("{notice}");
+    log::info!("{notice}");
+
+    fs::write(&marker, b"imported\n").map_err(|e| AppError::io(&marker, e))?;
+    #[cfg(unix)]
+    {
+        let _ = restrict_file_permissions(&marker);
+    }
+
+    Ok(LegacyImportOutcome::Imported {
+        from: legacy_dir,
+        to: target_dir,
+        copied,
+    })
+}
+
+/// Best-effort auto import for Database::init / first CLI open.
+pub fn maybe_auto_import_legacy_config_dir(max_schema_version: i32) {
+    match import_from_legacy_config_dir(max_schema_version, false, true) {
+        Ok(LegacyImportOutcome::Imported { .. }) => {}
+        Ok(LegacyImportOutcome::RefusedFutureSchema { .. }) => {}
+        Ok(LegacyImportOutcome::Skipped(reason)) => {
+            log::debug!("legacy config import skipped: {reason}");
+        }
+        Err(err) => {
+            log::warn!("legacy config import failed (continuing with empty default dir): {err}");
+            eprintln!(
+                "警告: 从 ~/.{} 导入到 ~/.{} 失败: {err}\n可稍后运行: cc-switch config import-from-legacy",
+                LEGACY_UPSTREAM_CONFIG_DIR_NAME, DEFAULT_APP_CONFIG_DIR_NAME
+            );
+        }
     }
 }
 

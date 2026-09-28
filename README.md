@@ -6,7 +6,7 @@
 
 中文 ｜ [English](README_EN.md)
 
-[![Version](https://img.shields.io/badge/version-5.11.3-blue.svg)](https://github.com/FengBujue0104/cc-switch-cli-fbj/releases/tag/v5.11.3)
+[![Version](https://img.shields.io/badge/version-5.12.0-blue.svg)](https://github.com/FengBujue0104/cc-switch-cli-fbj/releases/tag/v5.12.0)
 [![Platform](https://img.shields.io/badge/platform-Windows%20x64%20%7C%20Linux%20x64-lightgrey.svg)](https://github.com/FengBujue0104/cc-switch-cli-fbj/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
@@ -48,6 +48,16 @@ irm https://raw.githubusercontent.com/FengBujue0104/cc-switch-cli-fbj/main/insta
 
 Linux 默认装到 `~/.local/bin`（`CC_SWITCH_INSTALL_DIR` 可改），Windows 装到 `%LOCALAPPDATA%\cc-switch` 并写入用户 PATH。已装过时两个脚本都会先问一句覆盖还是取消：Linux 的 `install.sh` 在没有 TTY 时会直接退出并提示设置 `CC_SWITCH_FORCE=1`；Windows 的 `install.ps1` 没有 TTY 检测，非交互宿主里会直接报错，同样可以用 `CC_SWITCH_FORCE=1` 跳过询问。两个脚本都会下载 `checksums.txt`，SHA-256 对不上就拒绝安装。
 
+
+## 数据目录
+
+本 fork 默认使用 **`~/.cc-switch-fbj`**（Windows：`%USERPROFILE%\.cc-switch-fbj`），与上游 GUI 的 `~/.cc-switch` **隔离**，避免 GUI 升级 schema 后锁死本 CLI。
+
+- 库文件仍为目录内的 `cc-switch.db`；`settings.json`、`backups/` 等也在同一目录。
+- 可用环境变量 `CC_SWITCH_CONFIG_DIR` 覆盖（高级用法；指回 `~/.cc-switch` 需自行承担与 GUI 共用 schema 的风险）。
+- 首次启动时，若新目录还没有库、且检测到遗留的 `~/.cc-switch/cc-switch.db`，会**自动复制**（不移动）数据库与常见附属文件，并写入 `.imported-from-cc-switch` 标记，避免重复导入。也可手动执行：`cc-switch config import-from-legacy`。
+- 若遗留库的 `user_version` 高于本应用支持的 schema，会拒绝导入并提示备份，**不要删库**。
+
 ## 更新
 
 ```bash
@@ -55,7 +65,7 @@ cc-switch update --check     # 只看，不动文件
 cc-switch update             # 下载并替换当前二进制
 ```
 
-更新源是[本仓库的 GitHub Releases](https://github.com/FengBujue0104/cc-switch-cli-fbj/releases)，不是上游 SaladDay；`cc-switch update` 会用 `checksums.txt`（或 GitHub 资源 digest）校验 SHA-256。当前最新标签 **v5.11.3**，`5.10.6` 及以上可以直接自更新过来。
+更新源是[本仓库的 GitHub Releases](https://github.com/FengBujue0104/cc-switch-cli-fbj/releases)，不是上游 SaladDay；`cc-switch update` 会用 `checksums.txt`（或 GitHub 资源 digest）校验 SHA-256。当前最新标签 **v5.12.0**，`5.10.6` 及以上可以直接自更新过来。
 
 > 注意：如果当前安装的二进制编译于 `6c037571` 之前（即本 fork 把 `cc-switch update` 指向自己仓库之前），它的更新源仍是上游 `saladday/cc-switch-cli`——本 fork 唯一的早期包 `v5.10.5-fbj.1` 就属于这种情况。它报的版本号是 `5.10.5`，而上游最新目前也还是 `5.10.5`，所以它现在会一直显示「已是最新」；上游哪天发了更新的版本，它就会直接被更新成上游的构建。用上面的安装命令重装一次，即可切入本仓库的更新通道。
 

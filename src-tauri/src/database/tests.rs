@@ -323,6 +323,8 @@ fn schema_migration_rejects_future_version() {
     assert!(message.contains(&format!("数据库版本: {}", SCHEMA_VERSION + 1)));
     assert!(message.contains(&format!("最高支持数据库版本: {SCHEMA_VERSION}")));
     assert!(message.contains("cc-switch update"));
+    assert!(message.contains(".cc-switch-fbj"));
+    assert!(message.contains("不要直接删除") || message.contains("请先备份"));
 }
 
 #[test]
@@ -3938,4 +3940,190 @@ fn bulk_import_guard_restores_prior_synchronous() {
 
     // Drop 后恢复到进入前的原值 OFF(0)，而非硬编码 FULL(2)。
     assert_eq!(read_sync(&db), 0, "Drop 后应恢复原值 OFF(0)");
+}
+
+
+#[test]
+fn schema_migration_v18_adds_enabled_mcode_columns() {
+    let conn = Connection::open_in_memory().expect("open memory db");
+    conn.execute_batch(
+        "CREATE TABLE mcp_servers (
+            id TEXT PRIMARY KEY, name TEXT NOT NULL, server_config TEXT NOT NULL,
+            tags TEXT NOT NULL DEFAULT '[]',
+            enabled_claude BOOLEAN NOT NULL DEFAULT 0, enabled_codex BOOLEAN NOT NULL DEFAULT 0,
+            enabled_gemini BOOLEAN NOT NULL DEFAULT 0, enabled_grokbuild BOOLEAN NOT NULL DEFAULT 0,
+            enabled_opencode BOOLEAN NOT NULL DEFAULT 0, enabled_hermes BOOLEAN NOT NULL DEFAULT 0
+         );
+         CREATE TABLE skills (
+            id TEXT PRIMARY KEY, name TEXT NOT NULL, directory TEXT NOT NULL,
+            enabled_claude BOOLEAN NOT NULL DEFAULT 0, enabled_codex BOOLEAN NOT NULL DEFAULT 0,
+            enabled_gemini BOOLEAN NOT NULL DEFAULT 0, enabled_grokbuild BOOLEAN NOT NULL DEFAULT 0,
+            enabled_opencode BOOLEAN NOT NULL DEFAULT 0, enabled_hermes BOOLEAN NOT NULL DEFAULT 0,
+            installed_at INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL DEFAULT 0
+         );
+         INSERT INTO mcp_servers (id, name, server_config, enabled_claude)
+         VALUES ('svc', 'Svc', '{}', 1);
+         INSERT INTO skills (id, name, directory, enabled_codex)
+         VALUES ('sk', 'Sk', 'sk', 1);",
+    )
+    .expect("seed v18 tables without enabled_mcode");
+    Database::set_user_version(&conn, 18).expect("set user_version=18");
+
+    Database::apply_schema_migrations_on_conn(&conn).expect("migrate 18→19");
+
+    assert_eq!(
+        Database::get_user_version(&conn).expect("read version"),
+        SCHEMA_VERSION
+    );
+    assert!(
+        Database::has_column(&conn, "mcp_servers", "enabled_mcode").expect("mcp col"),
+        "mcp_servers.enabled_mcode missing after 18→19"
+    );
+    assert!(
+        Database::has_column(&conn, "skills", "enabled_mcode").expect("skills col"),
+        "skills.enabled_mcode missing after 18→19"
+    );
+    let mcp_flag: i64 = conn
+        .query_row(
+            "SELECT enabled_mcode FROM mcp_servers WHERE id = 'svc'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("read mcp flag");
+    assert_eq!(mcp_flag, 0);
+    let skill_flag: i64 = conn
+        .query_row(
+            "SELECT enabled_mcode FROM skills WHERE id = 'sk'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("read skill flag");
+    assert_eq!(skill_flag, 0);
+    let claude_enabled: i64 = conn
+        .query_row(
+            "SELECT enabled_claude FROM mcp_servers WHERE id = 'svc'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("preserve mcp row");
+    assert_eq!(claude_enabled, 1);
+}
+
+#[test]
+fn schema_open_existing_v19_with_enabled_mcode_succeeds() {
+    let conn = Connection::open_in_memory().expect("open memory db");
+    Database::create_tables_on_conn(&conn).expect("create current tables");
+    Database::set_user_version(&conn, 19).expect("set v19");
+    assert!(
+        Database::has_column(&conn, "mcp_servers", "enabled_mcode").expect("mcp"),
+        "new-DB DDL must include enabled_mcode"
+    );
+    assert!(
+        Database::has_column(&conn, "skills", "enabled_mcode").expect("skills"),
+        "new-DB DDL must include enabled_mcode"
+    );
+
+    Database::apply_schema_migrations_on_conn(&conn).expect("open existing v19");
+    assert_eq!(
+        Database::get_user_version(&conn).expect("version"),
+        SCHEMA_VERSION
+    );
+}
+
+#[test]
+fn slim_mcp_and_skill_writes_preserve_enabled_mcode() {
+    let db = Database::memory().expect("memory db");
+    {
+        let conn = db.conn.lock().expect("lock");
+        conn.execute(
+            "INSERT INTO mcp_servers (
+                id, name, server_config, tags,
+                enabled_claude, enabled_codex, enabled_gemini, enabled_grokbuild,
+                enabled_opencode, enabled_mcode, enabled_hermes
+            ) VALUES ('m1', 'M1', '{}', '[]', 1, 0, 0, 0, 0, 1, 0)",
+            [],
+        )
+        .expect("seed mcp with mcode=1");
+        conn.execute(
+            "INSERT INTO skills (
+                id, name, directory, enabled_mcode, enabled_hermes, installed_at
+             ) VALUES ('s1', 'S1', 's1', 1, 0, 1)",
+            [],
+        )
+        .expect("seed skill with mcode=1");
+    }
+
+    let mut server = db
+        .get_all_mcp_servers()
+        .expect("load mcp")
+        .shift_remove("m1")
+        .expect("mcp row");
+    server.description = Some("touch".into());
+    db.save_mcp_server(&server).expect("save mcp");
+
+    let mut skill = db
+        .get_installed_skill("s1")
+        .expect("load skill")
+        .expect("skill row");
+    skill.description = Some("touch".into());
+    db.save_skill(&skill).expect("save skill");
+
+    let conn = db.conn.lock().expect("lock");
+    let mcp_mcode: i64 = conn
+        .query_row(
+            "SELECT enabled_mcode FROM mcp_servers WHERE id = 'm1'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("mcp mcode");
+    let skill_mcode: i64 = conn
+        .query_row(
+            "SELECT enabled_mcode FROM skills WHERE id = 's1'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("skill mcode");
+    assert_eq!((mcp_mcode, skill_mcode), (1, 1));
+}
+
+#[test]
+fn harness_provider_roundtrip_on_schema_v19() {
+    let db = Database::memory().expect("memory db");
+    {
+        let conn = db.conn.lock().expect("lock");
+        Database::apply_schema_migrations_on_conn(&conn).expect("migrate to current");
+        assert_eq!(
+            Database::get_user_version(&conn).expect("version"),
+            SCHEMA_VERSION
+        );
+        assert!(
+            Database::has_column(&conn, "mcp_servers", "enabled_mcode").expect("col"),
+            "v19 DDL/migration must expose enabled_mcode"
+        );
+    }
+
+    for app in ["claude", "codex", "hermes", "pi"] {
+        let provider = Provider::with_id(
+            format!("{app}-p1"),
+            format!("{app} Provider"),
+            json!({ "apiKey": format!("key-for-{app}") }),
+            None,
+        );
+        db.save_provider(app, &provider)
+            .unwrap_or_else(|e| panic!("save {app}: {e}"));
+        db.set_current_provider(app, &provider.id)
+            .unwrap_or_else(|e| panic!("set current {app}: {e}"));
+        let loaded = db
+            .get_provider_by_id(&provider.id, app)
+            .unwrap_or_else(|e| panic!("get {app}: {e}"))
+            .unwrap_or_else(|| panic!("missing {app} provider"));
+        assert_eq!(
+            loaded.settings_config.get("apiKey").and_then(|v| v.as_str()),
+            Some(format!("key-for-{app}").as_str())
+        );
+        let current = db
+            .get_current_provider(app)
+            .unwrap_or_else(|e| panic!("current id {app}: {e}"));
+        assert_eq!(current.as_deref(), Some(provider.id.as_str()));
+    }
 }

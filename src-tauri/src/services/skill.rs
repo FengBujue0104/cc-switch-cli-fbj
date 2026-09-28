@@ -1,8 +1,8 @@
 //! Skills service layer
 //!
 //! v3.10.0+ 统一管理架构（与上游一致）：
-//! - SSOT（单一事实源）：`~/.cc-switch/skills/`
-//! - 数据库存储安装记录、启用状态与仓库列表（`~/.cc-switch/cc-switch.db`）
+//! - SSOT（单一事实源）：`~/.cc-switch-fbj/skills/`
+//! - 数据库存储安装记录、启用状态与仓库列表（`~/.cc-switch-fbj/cc-switch.db`）
 
 mod discovery;
 
@@ -130,7 +130,7 @@ impl Default for SkillStore {
 }
 
 // ============================================================================
-// New (Phase 3) SSOT-based model persisted to ~/.cc-switch/skills.json (no DB)
+// New (Phase 3) SSOT-based model persisted to ~/.cc-switch-fbj/skills.json (no DB)
 // ============================================================================
 
 /// Skill sync method (upstream-aligned).
@@ -152,7 +152,7 @@ pub enum SyncMethod {
 #[cfg_attr(feature = "cli", derive(clap::ValueEnum))]
 #[serde(rename_all = "snake_case")]
 pub enum SkillStorageLocation {
-    /// CC Switch managed directory (`~/.cc-switch/skills/`).
+    /// CC Switch managed directory (`~/.cc-switch-fbj/skills/`).
     #[default]
     #[cfg_attr(feature = "cli", value(alias = "cc_switch"))]
     CcSwitch,

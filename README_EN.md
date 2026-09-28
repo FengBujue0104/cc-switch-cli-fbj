@@ -6,7 +6,7 @@
 
 [中文](README.md) ｜ English
 
-[![Version](https://img.shields.io/badge/version-5.11.3-blue.svg)](https://github.com/FengBujue0104/cc-switch-cli-fbj/releases/tag/v5.11.3)
+[![Version](https://img.shields.io/badge/version-5.12.0-blue.svg)](https://github.com/FengBujue0104/cc-switch-cli-fbj/releases/tag/v5.12.0)
 [![Platform](https://img.shields.io/badge/platform-Windows%20x64%20%7C%20Linux%20x64-lightgrey.svg)](https://github.com/FengBujue0104/cc-switch-cli-fbj/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
@@ -48,6 +48,16 @@ irm https://raw.githubusercontent.com/FengBujue0104/cc-switch-cli-fbj/main/insta
 
 Linux installs to `~/.local/bin` (`CC_SWITCH_INSTALL_DIR` to override); Windows installs to `%LOCALAPPDATA%\cc-switch` and adds it to the user PATH. When a previous install is found both scripts ask update-or-cancel first: Linux's `install.sh` exits with a hint to set `CC_SWITCH_FORCE=1` when there is no TTY (`/dev/tty` probe); Windows' `install.ps1` has no TTY detection at all, so in a non-interactive host `Read-Host` simply fails — `CC_SWITCH_FORCE=1` skips the prompt there too. Both scripts download `checksums.txt` and refuse to install on a SHA-256 mismatch.
 
+
+## Data directory
+
+This fork defaults to **`~/.cc-switch-fbj`** (Windows: `%USERPROFILE%\.cc-switch-fbj`), isolated from the upstream GUI's `~/.cc-switch`, so a GUI schema bump cannot lock this CLI.
+
+- The DB file remains `cc-switch.db` inside that directory; `settings.json`, `backups/`, etc. live there too.
+- Override with `CC_SWITCH_CONFIG_DIR` (advanced; pointing back at `~/.cc-switch` means you accept shared-schema risk with the GUI).
+- On first launch, if the new directory has no DB and legacy `~/.cc-switch/cc-switch.db` exists, the CLI **copies** (does not move) the database and common sidecars, then writes `.imported-from-cc-switch` so it does not repeat. Manual: `cc-switch config import-from-legacy`.
+- If the legacy DB `user_version` is higher than this build supports, import is refused — **back up; do not delete the DB**.
+
 ## Update
 
 ```bash
@@ -55,7 +65,7 @@ cc-switch update --check     # read-only
 cc-switch update             # download and replace the current binary
 ```
 
-Updates come from [this repo's GitHub Releases](https://github.com/FengBujue0104/cc-switch-cli-fbj/releases), not upstream SaladDay. `cc-switch update` verifies SHA-256 from `checksums.txt` (or GitHub's asset digest). The latest tag is **v5.11.3**; anything on `5.10.6` or newer self-updates straight to it.
+Updates come from [this repo's GitHub Releases](https://github.com/FengBujue0104/cc-switch-cli-fbj/releases), not upstream SaladDay. `cc-switch update` verifies SHA-256 from `checksums.txt` (or GitHub's asset digest). The latest tag is **v5.12.0**; anything on `5.10.6` or newer self-updates straight to it.
 
 > Note: binaries compiled before `6c037571` (when this fork pointed `cc-switch update` at its own repo) still update from upstream `saladday/cc-switch-cli` — the fork's only earlier package, `v5.10.5-fbj.1`, is one of those. It reports its version as `5.10.5`, which is still upstream's latest release today, so it keeps saying "already latest"; the moment upstream ships something newer, those binaries will self-update to an upstream build. Reinstalling once with the command above moves them onto this repo's update channel.
 

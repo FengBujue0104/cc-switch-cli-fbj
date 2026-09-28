@@ -52,6 +52,14 @@ pub enum ConfigCommand {
     /// Reset to default configuration
     Reset,
 
+    /// Copy data from legacy ~/.cc-switch into the current config dir (one-shot)
+    #[command(name = "import-from-legacy")]
+    ImportFromLegacy {
+        /// Import even if the auto-import marker already exists (still refuses overwrite)
+        #[arg(long)]
+        force: bool,
+    },
+
     /// Manage common configuration snippet (per app)
     #[command(subcommand)]
     Common(config_common::CommonConfigCommand),
@@ -81,6 +89,7 @@ pub fn execute(cmd: ConfigCommand, app: Option<AppType>) -> Result<(), AppError>
         }
         ConfigCommand::Validate => validate_config(),
         ConfigCommand::Reset => reset_config(),
+        ConfigCommand::ImportFromLegacy { force } => import_from_legacy(force),
         ConfigCommand::Common(cmd) => config_common::execute(cmd, app.unwrap_or(AppType::Claude)),
         ConfigCommand::OpenClaw(cmd) => config_openclaw::execute(cmd),
         ConfigCommand::WebDav(cmd) => config_webdav::execute(cmd),
@@ -483,6 +492,59 @@ fn validate_config() -> Result<(), AppError> {
     println!("{}", success("✓ Database validation passed"));
 
     Ok(())
+}
+
+
+fn import_from_legacy(force: bool) -> Result<(), AppError> {
+    use crate::config::{
+        import_from_legacy_config_dir, LegacyImportOutcome, DEFAULT_APP_CONFIG_DIR_NAME,
+        LEGACY_UPSTREAM_CONFIG_DIR_NAME,
+    };
+    use crate::database::SCHEMA_VERSION;
+
+    println!(
+        "{}",
+        info(&format!(
+            "Importing from ~/{} into the active config directory (default ~/{} )...",
+            LEGACY_UPSTREAM_CONFIG_DIR_NAME, DEFAULT_APP_CONFIG_DIR_NAME
+        ))
+    );
+
+    match import_from_legacy_config_dir(SCHEMA_VERSION, force, false)? {
+        LegacyImportOutcome::Imported { from, to, copied } => {
+            println!(
+                "{}",
+                success(&format!(
+                    "Copied from {} → {} ({})",
+                    from.display(),
+                    to.display(),
+                    copied.join(", ")
+                ))
+            );
+            println!(
+                "{}",
+                warning(
+                    "Upstream GUI still uses ~/.cc-switch; the two directories diverge from now on."
+                )
+            );
+            Ok(())
+        }
+        LegacyImportOutcome::RefusedFutureSchema {
+            version,
+            max_supported,
+        } => Err(AppError::Database(format!(
+            "遗留数据库版本 {version} 高于本应用支持的 {max_supported}，已拒绝导入。\n\
+             请升级本 CLI，或在上游 GUI 中导出供应商后再重建。"
+        ))),
+        LegacyImportOutcome::Skipped(reason) => {
+            println!("{}", warning(&format!("Skipped: {reason}")));
+            println!(
+                "{}",
+                info("Tip: ensure ~/.cc-switch/cc-switch.db exists and the target dir has no database yet. Use --force to ignore the import marker.")
+            );
+            Ok(())
+        }
+    }
 }
 
 fn reset_config() -> Result<(), AppError> {

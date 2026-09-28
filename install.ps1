@@ -128,6 +128,7 @@ try {
         Info "$InstallDir is already on PATH."
     }
     Info "Done. Run: cc-switch --version"
+    Info "Data directory: $env:USERPROFILE\.cc-switch-fbj (override with CC_SWITCH_CONFIG_DIR)."
 } finally {
     if (Test-Path -LiteralPath $tmp) {
         Remove-Item -Recurse -Force $tmp

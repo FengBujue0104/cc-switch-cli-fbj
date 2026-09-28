@@ -174,3 +174,4 @@ if ! command -v "${BIN_NAME}" >/dev/null 2>&1 || [[ "$(command -v "${BIN_NAME}")
   esac
 fi
 printf '  Run \033[1m%s --version\033[0m to verify.\n' "${BIN_NAME}"
+printf '  Data directory: ~/.cc-switch-fbj (override with CC_SWITCH_CONFIG_DIR).\n'

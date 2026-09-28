@@ -63,7 +63,7 @@ const USAGE_MAINTENANCE_INTERVAL_SECS: u64 = 24 * 60 * 60;
 /// 注意：本库 schema 与上游项目同步（WebDAV 亦会整库同步），本仓库不得自行
 /// 加表/加列或提升版本号；本地新增的持久化需求一律放独立 sidecar 存储
 /// （如 session_manager::scan_cache_store）。
-pub(crate) const SCHEMA_VERSION: i32 = 18;
+pub(crate) const SCHEMA_VERSION: i32 = 19;
 
 fn database_open_flags() -> OpenFlags {
     OpenFlags::SQLITE_OPEN_READ_WRITE
@@ -515,7 +515,7 @@ impl Database {
 
     /// 初始化数据库连接并创建表
     ///
-    /// 数据库文件位于 `~/.cc-switch/cc-switch.db`
+    /// 数据库文件位于 `~/.cc-switch-fbj/cc-switch.db`（可由 CC_SWITCH_CONFIG_DIR 覆盖）
     pub fn init() -> Result<Self, AppError> {
         Self::init_impl(true)
     }
@@ -547,6 +547,8 @@ impl Database {
             log::warn!("拒绝初始化数据库：配置目录校验失败: {err}");
             return Err(err);
         }
+        // One-shot copy from ~/.cc-switch → ~/.cc-switch-fbj before creating an empty DB.
+        crate::config::maybe_auto_import_legacy_config_dir(SCHEMA_VERSION);
         crate::config::create_managed_config_dir_all(&get_app_config_dir())?;
         let db_path = database_path()?;
         let migration_probe = Self::existing_database_needs_migration(&db_path)?;

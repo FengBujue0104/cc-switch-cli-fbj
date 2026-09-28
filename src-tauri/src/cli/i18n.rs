@@ -5662,7 +5662,7 @@ pub mod texts {
     ) -> &'static str {
         match location {
             crate::services::skill::SkillStorageLocation::CcSwitch => {
-                "CC Switch (~/.cc-switch/skills)"
+                "CC Switch (~/.cc-switch-fbj/skills)"
             }
             crate::services::skill::SkillStorageLocation::Unified => "Unified (~/.agents/skills)",
         }
@@ -12467,9 +12467,9 @@ pub mod texts {
 
     pub fn codex_unified_history_enable_message() -> &'static str {
         if is_chinese() {
-            "开启后，官方订阅与第三方将共用同一个会话历史列表。注意：跨供应商继续旧会话时，可能因对方后端无法解密 encrypted_content 推理内容而失败。\n\n可选择同时把现有官方会话历史迁入共享列表（迁移前自动备份到 ~/.cc-switch/backups，关闭开关时可选择恢复）。"
+            "开启后，官方订阅与第三方将共用同一个会话历史列表。注意：跨供应商继续旧会话时，可能因对方后端无法解密 encrypted_content 推理内容而失败。\n\n可选择同时把现有官方会话历史迁入共享列表（迁移前自动备份到 ~/.cc-switch-fbj/backups，关闭开关时可选择恢复）。"
         } else {
-            "When enabled, the official subscription and third-party providers share one session history list. Note: resuming an old session across providers may fail because its encrypted_content reasoning cannot be decrypted by another backend.\n\nYou can also migrate your existing official session history into the shared list (originals are backed up to ~/.cc-switch/backups first and can be restored when you turn this off)."
+            "When enabled, the official subscription and third-party providers share one session history list. Note: resuming an old session across providers may fail because its encrypted_content reasoning cannot be decrypted by another backend.\n\nYou can also migrate your existing official session history into the shared list (originals are backed up to ~/.cc-switch-fbj/backups first and can be restored when you turn this off)."
         }
     }
 
