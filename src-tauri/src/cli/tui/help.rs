@@ -616,8 +616,8 @@ fn provider_field_help(app_type: AppType, field: ProviderAddField) -> HelpConten
         ProviderAddField::CodexModel => HelpContent::new(
             texts::model_label(),
             help_lines(
-                "Codex 默认模型。第三方模型如果不是 GPT 系列，通常需要本地路由。\n上游模型映射会生成 model_catalog_json，让 Codex 的 /model 命令看到第三方模型；修改目录后通常需要重启 Codex 才会刷新。",
-                "Default Codex model. Third-party non-GPT models usually need local routing.\nUpstream model mapping generates model_catalog_json so Codex /model can show third-party models. Restart Codex after catalog changes.",
+                "Codex 默认模型。第三方模型如果不是 GPT 系列，通常需要本地路由。\n上游模型映射会生成 model_catalog_json，让 Codex 的 /model 命令看到第三方模型；修改目录后通常需结束 codex 进程再开才会刷新。",
+                "Default Codex model. Third-party non-GPT models usually need local routing.\nUpstream model mapping generates model_catalog_json so Codex /model can show third-party models. Fully quit the Codex process after catalog changes.",
             ),
         ),
         ProviderAddField::CodexPromptCacheRouting => HelpContent::new(
@@ -912,8 +912,8 @@ fn codex_local_routing_field_help(field: CodexLocalRoutingField) -> HelpContent 
         CodexLocalRoutingField::ModelCatalog => HelpContent::new(
             texts::tui_codex_model_catalog(),
             help_lines(
-                "在此把供应商模型映射成 Codex 可见模型。a 添加行，Enter 编辑单元格，←→ 切换列，f 拉取，Del 删除。\n三列：\n· 实际请求模型 —— 发给上游的模型 ID，不能为空（例：deepseek-chat）\n· 显示名 —— /model 菜单里显示的名字，留空用模型 ID（例：DeepSeek Chat）\n· 上下文窗口 —— 该模型的上下文长度，留空不覆盖（例：128000）\n修改后通常需要重启 Codex，/model 列表才会刷新。",
-                "Map provider models into models visible to Codex here. Press a to add a row, Enter to edit a cell, ←→ to switch columns, f to fetch, Del to delete.\nThree columns:\n· Request model — the model ID sent upstream, cannot be empty (e.g. deepseek-chat)\n· Display name — the name shown in the /model menu, empty uses the model ID (e.g. DeepSeek Chat)\n· Context window — this model's context length, empty to not override (e.g. 128000)\nRestart Codex after changes so the /model list refreshes.",
+                "在此把供应商模型映射成 Codex 可见模型。a 添加行，Enter 编辑单元格，←→ 切换列，f 拉取，Del 删除。\n三列：\n· 实际请求模型 —— 发给上游的模型 ID，不能为空（例：deepseek-chat）\n· 显示名 —— /model 菜单里显示的名字，留空用模型 ID（例：DeepSeek Chat）\n· 上下文窗口 —— 该模型的上下文长度，留空不覆盖（例：128000）\n修改后通常需结束 codex 进程再开，/model 列表才会刷新。",
+                "Map provider models into models visible to Codex here. Press a to add a row, Enter to edit a cell, ←→ to switch columns, f to fetch, Del to delete.\nThree columns:\n· Request model — the model ID sent upstream, cannot be empty (e.g. deepseek-chat)\n· Display name — the name shown in the /model menu, empty uses the model ID (e.g. DeepSeek Chat)\n· Context window — this model's context length, empty to not override (e.g. 128000)\nFully quit the Codex process after changes so the /model list refreshes.",
             ),
         ),
     }
@@ -984,8 +984,8 @@ fn codex_model_catalog_field_help(field: CodexModelCatalogField) -> HelpContent 
         ),
     };
     content.lines.extend(help_lines(
-        "模型目录只在 Codex/app-server 启动时加载。修改后请重启 Codex；Desktop SSH 项目请重新连接，目录来自远端同一用户的 CODEX_HOME。",
-        "The model catalog is loaded when Codex/app-server starts. Restart Codex after editing it; reconnect Desktop SSH projects because the catalog comes from the same remote user's CODEX_HOME.",
+        "模型目录只在 Codex/app-server 启动时加载。修改后请结束 codex 进程再开（仅重开终端或 codex agents 停任务不够）；Desktop SSH 项目请重新连接，目录来自远端同一用户的 CODEX_HOME。",
+        "The model catalog is loaded when Codex/app-server starts. Fully quit the Codex process after editing it (reopening the terminal or stopping tasks via codex agents is not enough); reconnect Desktop SSH projects because the catalog comes from the same remote user's CODEX_HOME.",
     ));
     content
 }

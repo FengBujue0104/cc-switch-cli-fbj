@@ -8755,9 +8755,9 @@ pub mod texts {
 
     pub fn tui_codex_provider_switched_restart_notice() -> &'static str {
         if is_chinese() {
-            "Codex 供应商已切换。请重启 Codex；SSH 远程项目请重新连接。"
+            "Codex 供应商已切换。请结束 codex 进程后再开（仅重开终端或 codex agents 停任务不够）；SSH 远程项目请重新连接。"
         } else {
-            "Codex provider switched. Restart Codex; reconnect SSH remote projects."
+            "Codex provider switched. Fully quit the Codex process, then reopen (reopening the terminal or stopping tasks via codex agents is not enough). Reconnect SSH remote projects."
         }
     }
 
