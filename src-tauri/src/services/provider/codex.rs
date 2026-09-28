@@ -604,14 +604,16 @@ impl ProviderService {
             clean_config_text
         };
 
-        // `force_sync` only bypasses the live-sync policy above. Authentication
-        // placement must remain identical to the upstream provider write: an
-        // official snapshot writes auth.json only when it contains login
-        // material, while a third-party provider writes unless preservation is
-        // enabled.
-        let should_write_auth = (is_official
-            && crate::codex_config::codex_auth_has_login_material(auth))
-            || (!is_official && !crate::settings::preserve_codex_official_auth_on_switch());
+        // Authentication placement must stay aligned with
+        // `write_codex_live_for_provider`:
+        // - official: write auth.json only when it has login material
+        // - third-party + preserve OFF: write sanitized API-key auth
+        // - third-party + preserve ON: keep ChatGPT OAuth cache, but seed a
+        //   minimal OPENAI_API_KEY when live auth.json is missing/empty so
+        //   Codex CLI does not stick on the Sign-in welcome screen
+        let preserve = crate::settings::preserve_codex_official_auth_on_switch();
+        let needs_auth_seed =
+            !is_official && crate::codex_config::live_codex_auth_needs_api_key_seed();
 
         // A third-party provider must authenticate with its API key, never with a
         // stray ChatGPT OAuth login that leaked into auth.json (e.g. from running
@@ -629,25 +631,42 @@ impl ProviderService {
             )
         };
 
-        // config.toml is a clean OVERWRITE with the provider's effective config.
-        // When auth.json is preserved (third-party + preserve flag) the API key
-        // is injected into config.toml as an experimental_bearer_token instead.
-        let config_text = if should_write_auth {
-            live_config_text
+        let should_write_auth = if is_official {
+            crate::codex_config::codex_auth_has_login_material(auth)
+        } else if !preserve {
+            true
         } else {
-            crate::codex_config::prepare_codex_provider_live_config(&write_auth, &live_config_text)?
+            // preserve ON: only write when seeding missing/empty live auth
+            needs_auth_seed
         };
 
-        // auth.json follows Preserve/Write/Delete (no merge): a switch always
-        // prefers the incoming provider's auth, but never clobbers a preserved
-        // ChatGPT OAuth cache when auth is preserved. An empty/null incoming auth
-        // removes the stale live auth.json rather than writing an empty file.
+        // config.toml is a clean OVERWRITE with the provider's effective config.
+        // When preserve is on (including the seed-missing-auth path) the API key
+        // is injected into config.toml as an experimental_bearer_token. When
+        // preserve is off the key lives only in auth.json.
+        let config_text = if !is_official && preserve {
+            crate::codex_config::prepare_codex_provider_live_config(&write_auth, &live_config_text)?
+        } else {
+            live_config_text
+        };
+
+        // auth.json follows Preserve/Write (no merge): a switch prefers the
+        // incoming provider's auth, but never clobbers a preserved ChatGPT
+        // OAuth cache. Refuse empty/useless third-party auth instead of writing
+        // `{}` or silently deleting the live file.
         let auth = if should_write_auth {
-            if write_auth.is_null()
-                || write_auth
-                    .as_object()
-                    .is_some_and(serde_json::Map::is_empty)
-            {
+            if is_official {
+                if write_auth.is_null()
+                    || write_auth
+                        .as_object()
+                        .is_some_and(serde_json::Map::is_empty)
+                {
+                    PreparedCodexAuthWrite::Delete
+                } else {
+                    PreparedCodexAuthWrite::Write(write_auth)
+                }
+            } else if !crate::codex_config::codex_auth_has_login_material(&write_auth) {
+                // No usable key: delete stale live auth rather than writing `{}`.
                 PreparedCodexAuthWrite::Delete
             } else {
                 PreparedCodexAuthWrite::Write(write_auth)

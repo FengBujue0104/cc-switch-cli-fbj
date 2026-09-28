@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.12.1] - 2026-09-28
+
+### Fixed
+
+- **Codex 第三方切换留下空 auth.json / empty auth.json on third-party switch:** 开启「切换时保留官方登录」时若 `~/.codex/auth.json` 缺失或无可用登录材料，会写入最小的 `OPENAI_API_KEY`（0600），避免 Codex CLI 卡在 Sign-in 欢迎页；已有 ChatGPT OAuth 仍保留。关闭保留时仍写清洗后的第三方 auth；缺少 API key 时拒绝写入空 `{}`。
+- When preserve-official-auth is on and live `auth.json` is missing/empty, seed a minimal `OPENAI_API_KEY` (mode 0600) so Codex CLI skips the Sign-in welcome screen; existing ChatGPT OAuth tokens stay untouched. With preserve off, sanitized third-party auth is written as before; missing API key fails instead of writing `{}`.
+
 ## [5.12.0] - 2026-09-28
 
 ### Changed

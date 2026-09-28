@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use crate::config::{
     atomic_write, delete_file, home_dir, read_json_file, sanitize_provider_name, write_json_file,
-    write_text_file,
+    write_json_file_private, write_text_file,
 };
 use crate::error::AppError;
 use crate::model_capabilities::{image_input_capability_from_modalities, ImageInputCapability};
@@ -194,9 +194,9 @@ pub fn write_codex_live_atomic_optional_auth(
         toml::from_str::<toml::Table>(&cfg_text).map_err(|e| AppError::toml(&config_path, e))?;
     }
 
-    // 第一步：写 auth.json
+    // 第一步：写 auth.json（凭据文件，强制 0600）
     if let Some(auth) = auth {
-        write_json_file(&auth_path, auth)?;
+        write_json_file_private(&auth_path, auth)?;
     } else {
         delete_file(&auth_path)?;
     }
@@ -1511,11 +1511,49 @@ pub fn strip_codex_mcp_servers_from_settings(settings: &mut Value) -> Result<(),
     Ok(())
 }
 
+/// Read live `auth.json` when present. Missing or unreadable → `None`.
+fn read_live_codex_auth_optional() -> Option<Value> {
+    let path = get_codex_auth_path();
+    if !path.exists() {
+        return None;
+    }
+    read_json_file(&path).ok()
+}
+
+/// True when live `auth.json` is missing or has no usable login material.
+///
+/// Codex CLI shows the Sign-in welcome screen whenever `auth.json` is absent or
+/// empty, even if `config.toml` already carries an `experimental_bearer_token`.
+/// Third-party switches must seed a minimal `OPENAI_API_KEY` in that case.
+pub fn live_codex_auth_needs_api_key_seed() -> bool {
+    match read_live_codex_auth_optional() {
+        None => true,
+        Some(auth) => !codex_auth_has_login_material(&auth),
+    }
+}
+
+fn require_codex_third_party_auth_material(
+    auth: Option<&Value>,
+    config_text: Option<&str>,
+) -> Result<Value, AppError> {
+    let seeded = sanitize_codex_third_party_auth(auth, config_text, None, None);
+    if !codex_auth_has_login_material(&seeded) {
+        return Err(AppError::localized(
+            "provider.codex.api_key.missing",
+            "Codex 第三方供应商缺少可用的 OPENAI_API_KEY，无法写入 auth.json",
+            "Codex third-party provider is missing a usable OPENAI_API_KEY; refusing to write empty auth.json",
+        ));
+    }
+    Ok(seeded)
+}
+
 /// Route a Codex live write between full auth+config or config-only.
 ///
 /// Official providers with usable login material own `auth.json`. Third-party
 /// providers only touch `config.toml` when the compatibility setting is enabled
-/// so the user's ChatGPT login cache survives provider switches.
+/// so the user's ChatGPT login cache survives provider switches — unless live
+/// `auth.json` is missing/empty, in which case a minimal `OPENAI_API_KEY` is
+/// seeded so Codex CLI does not stick on the Sign-in welcome screen.
 pub fn write_codex_provider_live_config_only_with_catalog(
     settings: &Value,
     auth: &Value,
@@ -1527,7 +1565,12 @@ pub fn write_codex_provider_live_config_only_with_catalog(
         .transpose()?;
     let live_config =
         prepare_codex_provider_live_config(auth, prepared_config.as_deref().unwrap_or(""))?;
-    write_codex_live_config_atomic(Some(&live_config))
+    if live_codex_auth_needs_api_key_seed() {
+        let seeded = require_codex_third_party_auth_material(Some(auth), config_text)?;
+        write_codex_live_atomic(&seeded, Some(&live_config))
+    } else {
+        write_codex_live_config_atomic(Some(&live_config))
+    }
 }
 
 pub fn write_codex_live_for_provider(
@@ -1545,32 +1588,45 @@ pub fn write_codex_live_for_provider(
         };
     let config_text = unified_official_config.as_deref().or(config_text);
 
-    // A third-party provider must authenticate with its API key, never with a
-    // stray ChatGPT OAuth login that leaked into auth.json (e.g. from running
-    // `codex login` while it was active). Strip OAuth material for non-official
-    // providers, recovering the key from a config bearer token when auth.json
-    // only carried OAuth (issue #328). Official providers own auth.json.
-    let sanitized_auth = if category == Some("official") {
-        None
+    if category == Some("official") {
+        let should_write_auth = codex_auth_has_login_material(auth);
+        if should_write_auth {
+            write_codex_live_atomic(auth, config_text)
+        } else {
+            write_codex_live_config_atomic(Some(config_text.unwrap_or("")))
+        }
     } else {
-        Some(sanitize_codex_third_party_auth(
-            Some(auth),
-            config_text,
-            None,
-            None,
-        ))
-    };
-    let auth = sanitized_auth.as_ref().unwrap_or(auth);
+        // A third-party provider must authenticate with its API key, never with a
+        // stray ChatGPT OAuth login that leaked into auth.json (e.g. from running
+        // `codex login` while it was active). Strip OAuth material, recovering the
+        // key from a config bearer token when auth.json only carried OAuth
+        // (issue #328).
+        let sanitized = sanitize_codex_third_party_auth(Some(auth), config_text, None, None);
+        let preserve = crate::settings::preserve_codex_official_auth_on_switch();
 
-    let should_write_auth = (category == Some("official") && codex_auth_has_login_material(auth))
-        || (category != Some("official")
-            && !crate::settings::preserve_codex_official_auth_on_switch());
-
-    if should_write_auth {
-        write_codex_live_atomic(auth, config_text)
-    } else {
-        let live_config = prepare_codex_provider_live_config(auth, config_text.unwrap_or(""))?;
-        write_codex_live_config_atomic(Some(&live_config))
+        if preserve {
+            // Always put the provider API key into config.toml as a bearer token
+            // so routing works while a ChatGPT OAuth cache is preserved.
+            let live_config =
+                prepare_codex_provider_live_config(&sanitized, config_text.unwrap_or(""))?;
+            if live_codex_auth_needs_api_key_seed() {
+                // Missing/empty live auth.json → Codex shows Sign-in welcome even
+                // though config.toml already has the bearer token. Seed a minimal
+                // OPENAI_API_KEY (never write `{}`).
+                let seeded = require_codex_third_party_auth_material(Some(auth), config_text)?;
+                write_codex_live_atomic(&seeded, Some(&live_config))
+            } else {
+                write_codex_live_config_atomic(Some(&live_config))
+            }
+        } else {
+            // Full third-party auth write (sanitized). Never write empty `{}`;
+            // if no key is available, remove a stale live auth.json instead.
+            if !codex_auth_has_login_material(&sanitized) {
+                write_codex_live_atomic_optional_auth(None, config_text)
+            } else {
+                write_codex_live_atomic(&sanitized, config_text)
+            }
+        }
     }
 }
 
@@ -3442,6 +3498,194 @@ experimental_bearer_token = "sk-live"
         assert!(
             !should_restore_codex_provider_token_for_backfill(Some("official"), &api_key_template),
             "official providers should never restore third-party bearer tokens"
+        );
+    }
+
+    fn third_party_provider_config() -> (&'static str, Value) {
+        let config = r#"model_provider = "custom"
+model = "gpt-5.2-codex"
+
+[model_providers.custom]
+base_url = "https://api.custom.example/v1"
+wire_api = "responses"
+"#;
+        let auth = json!({ "OPENAI_API_KEY": "sk-thirdparty" });
+        (config, auth)
+    }
+
+    fn with_preserve_setting<F: FnOnce()>(enabled: bool, f: F) {
+        let previous = crate::settings::preserve_codex_official_auth_on_switch();
+        crate::settings::set_preserve_codex_official_auth_on_switch(enabled)
+            .expect("set preserve flag");
+        f();
+        crate::settings::set_preserve_codex_official_auth_on_switch(previous)
+            .expect("restore preserve flag");
+    }
+
+    #[test]
+    fn third_party_switch_with_preserve_seeds_missing_auth() {
+        let _guard = lock_test_home_and_settings();
+        let temp_home = TempDir::new().expect("create temp home");
+        let codex_dir = temp_home.path().join(".codex");
+        fs::create_dir_all(&codex_dir).expect("create codex dir");
+        set_test_home_override(Some(temp_home.path()));
+        let _settings = SettingsGuard::with_codex_config_dir(Some(codex_dir.to_str().unwrap()));
+        let _env = CodexHomeEnvGuard::new(None);
+
+        let (config, auth) = third_party_provider_config();
+        assert!(
+            !get_codex_auth_path().exists(),
+            "precondition: live auth.json must be missing"
+        );
+
+        with_preserve_setting(true, || {
+            write_codex_live_for_provider(Some("custom"), &auth, Some(config))
+                .expect("third-party switch should seed missing auth");
+        });
+
+        let live_auth: Value =
+            read_json_file(&get_codex_auth_path()).expect("seeded auth.json should exist");
+        assert_eq!(
+            live_auth.get("OPENAI_API_KEY").and_then(Value::as_str),
+            Some("sk-thirdparty"),
+            "missing live auth must be seeded with OPENAI_API_KEY"
+        );
+        assert_eq!(
+            live_auth.as_object().map(|o| o.len()),
+            Some(1),
+            "seeded auth must be minimal API-key only"
+        );
+
+        let live_config = fs::read_to_string(get_codex_config_path()).expect("read config.toml");
+        assert_eq!(
+            extract_codex_experimental_bearer_token(&live_config).as_deref(),
+            Some("sk-thirdparty"),
+            "preserve path must still inject bearer token into config.toml"
+        );
+    }
+
+    #[test]
+    fn third_party_switch_with_preserve_keeps_existing_chatgpt_tokens() {
+        let _guard = lock_test_home_and_settings();
+        let temp_home = TempDir::new().expect("create temp home");
+        let codex_dir = temp_home.path().join(".codex");
+        fs::create_dir_all(&codex_dir).expect("create codex dir");
+        set_test_home_override(Some(temp_home.path()));
+        let _settings = SettingsGuard::with_codex_config_dir(Some(codex_dir.to_str().unwrap()));
+        let _env = CodexHomeEnvGuard::new(None);
+
+        let preserved = json!({
+            "auth_mode": "chatgpt",
+            "OPENAI_API_KEY": null,
+            "tokens": {
+                "access_token": "oauth-access-token",
+                "account_id": "account-1"
+            }
+        });
+        write_json_file_private(&get_codex_auth_path(), &preserved).expect("seed OAuth auth.json");
+
+        let (config, auth) = third_party_provider_config();
+        with_preserve_setting(true, || {
+            write_codex_live_for_provider(Some("custom"), &auth, Some(config))
+                .expect("third-party switch should preserve OAuth auth");
+        });
+
+        let live_auth: Value =
+            read_json_file(&get_codex_auth_path()).expect("auth.json should still exist");
+        assert_eq!(
+            live_auth, preserved,
+            "existing ChatGPT OAuth tokens must not be overwritten when preserve is on"
+        );
+
+        let live_config = fs::read_to_string(get_codex_config_path()).expect("read config.toml");
+        assert_eq!(
+            extract_codex_experimental_bearer_token(&live_config).as_deref(),
+            Some("sk-thirdparty"),
+            "config.toml must still receive the third-party bearer token"
+        );
+    }
+
+    #[test]
+    fn third_party_switch_without_preserve_writes_sanitized_auth() {
+        let _guard = lock_test_home_and_settings();
+        let temp_home = TempDir::new().expect("create temp home");
+        let codex_dir = temp_home.path().join(".codex");
+        fs::create_dir_all(&codex_dir).expect("create codex dir");
+        set_test_home_override(Some(temp_home.path()));
+        let _settings = SettingsGuard::with_codex_config_dir(Some(codex_dir.to_str().unwrap()));
+        let _env = CodexHomeEnvGuard::new(None);
+
+        // Stale OAuth material must be stripped when preserve is off.
+        write_json_file_private(
+            &get_codex_auth_path(),
+            &json!({
+                "auth_mode": "chatgpt",
+                "tokens": { "access_token": "stale-oauth" },
+                "OPENAI_API_KEY": "sk-stale"
+            }),
+        )
+        .expect("seed stale auth");
+
+        let (config, auth) = third_party_provider_config();
+        with_preserve_setting(false, || {
+            write_codex_live_for_provider(Some("custom"), &auth, Some(config))
+                .expect("third-party switch without preserve should write sanitized auth");
+        });
+
+        let live_auth: Value =
+            read_json_file(&get_codex_auth_path()).expect("auth.json should exist");
+        assert_eq!(
+            live_auth,
+            json!({ "OPENAI_API_KEY": "sk-thirdparty" }),
+            "preserve=false must write sanitized API-key-only auth"
+        );
+
+        let live_config = fs::read_to_string(get_codex_config_path()).expect("read config.toml");
+        assert_eq!(
+            extract_codex_experimental_bearer_token(&live_config),
+            None,
+            "preserve=false keeps the API key in auth.json, not as a config bearer"
+        );
+        assert!(
+            live_config.contains("base_url = \"https://api.custom.example/v1\""),
+            "config.toml should still be updated: {live_config}"
+        );
+    }
+
+    #[test]
+    fn third_party_switch_refuses_empty_auth_without_api_key() {
+        let _guard = lock_test_home_and_settings();
+        let temp_home = TempDir::new().expect("create temp home");
+        let codex_dir = temp_home.path().join(".codex");
+        fs::create_dir_all(&codex_dir).expect("create codex dir");
+        set_test_home_override(Some(temp_home.path()));
+        let _settings = SettingsGuard::with_codex_config_dir(Some(codex_dir.to_str().unwrap()));
+        let _env = CodexHomeEnvGuard::new(None);
+
+        let config = r#"model_provider = "custom"
+model = "gpt-5.2-codex"
+
+[model_providers.custom]
+base_url = "https://api.custom.example/v1"
+wire_api = "responses"
+"#;
+        let auth = json!({});
+
+        with_preserve_setting(true, || {
+            let err = write_codex_live_for_provider(Some("custom"), &auth, Some(config))
+                .expect_err("missing API key must not silently write empty auth.json");
+            let msg = err.to_string();
+            assert!(
+                msg.contains("OPENAI_API_KEY")
+                    || msg.contains("API key")
+                    || msg.contains("api_key"),
+                "error should mention missing API key: {msg}"
+            );
+        });
+
+        assert!(
+            !get_codex_auth_path().exists(),
+            "refusing empty auth must not create auth.json"
         );
     }
 }
